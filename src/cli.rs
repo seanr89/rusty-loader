@@ -69,6 +69,26 @@ pub struct Cli {
     /// Optional file path to write the final JSON benchmark report
     #[arg(long = "output-json")]
     pub output_json: Option<PathBuf>,
+
+    /// Enable the embedded real-time web monitoring dashboard during the run
+    #[arg(long = "gui", default_value_t = false)]
+    pub gui: bool,
+
+    /// Port to bind the embedded GUI server (0 assigns an ephemeral port)
+    #[arg(long = "gui-port", default_value_t = 8080)]
+    pub gui_port: u16,
+
+    /// IP address to bind the embedded GUI server (loopback 127.0.0.1 by default)
+    #[arg(long = "gui-bind", default_value = "127.0.0.1")]
+    pub gui_bind: String,
+
+    /// Automatically open the GUI dashboard URL in the default browser on startup
+    #[arg(long = "gui-open", default_value_t = false)]
+    pub gui_open: bool,
+
+    /// Keep the GUI dashboard server running after completion until Ctrl+C
+    #[arg(long = "gui-keep-alive", default_value_t = false)]
+    pub gui_keep_alive: bool,
 }
 
 /// Supported HTTP methods for load testing.

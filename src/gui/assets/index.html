@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <script>
+  try {
+    document.querySelector('meta[name="color-scheme"]').content = localStorage.getItem("color-scheme") ?? "light dark";
+  } catch (_) {}
+  </script>
+  <title>rusty-loader — Live Telemetry Dashboard</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-brand">
+        <div class="brand-mark" aria-hidden="true">RL</div>
+        <div class="brand-info">
+          <div class="brand-title-row">
+            <h1>rusty-loader</h1>
+            <span id="phase-badge" class="badge badge-running" role="status" aria-live="polite">Connecting</span>
+          </div>
+          <div class="target-row">
+            <span id="meta-method" class="method-pill">GET</span>
+            <code id="meta-url" class="target-url">Loading target...</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="topbar-controls">
+        <div class="progress-cluster" aria-label="Benchmark progress">
+          <div class="progress-labels">
+            <span id="timer-elapsed">0.0s</span>
+            <span class="progress-sep">/</span>
+            <span id="timer-duration">0.0s</span>
+          </div>
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="run-progress">
+            <div class="progress-fill" id="run-progress-fill"></div>
+          </div>
+        </div>
+
+        <div class="button-group">
+          <button id="pause-charts-btn" type="button" class="btn btn-secondary" aria-pressed="false">
+            Pause Charts
+          </button>
+          <a id="export-json-btn" href="/api/export/json" download="rusty-loader-report.json" class="btn btn-secondary">
+            Export JSON
+          </a>
+          <button id="theme-toggle" type="button" class="btn btn-secondary theme-toggle">
+            <span class="theme-opt theme-opt-light" aria-hidden="true">&#9728;</span>
+            <span class="theme-opt theme-opt-light sr-only">Switch to light theme</span>
+            <span class="theme-opt theme-opt-dark" aria-hidden="true">&#9790;</span>
+            <span class="theme-opt theme-opt-dark sr-only">Switch to dark theme</span>
+          </button>
+          <button id="stop-run-btn" type="button" class="btn btn-danger">
+            Stop Run
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div id="connection-banner" class="notice-banner" hidden role="status" aria-live="polite"></div>
+
+    <main class="dashboard-main">
+      <section class="kpi-grid" aria-label="Key Performance Indicators">
+        <article class="kpi-card">
+          <header class="kpi-label">Live Throughput</header>
+          <div class="kpi-value" id="kpi-window-rps">0.0 req/s</div>
+          <footer class="kpi-sub" id="kpi-avg-rps">Avg: 0.0 req/s</footer>
+        </article>
+
+        <article class="kpi-card">
+          <header class="kpi-label">Active Virtual Users</header>
+          <div class="kpi-value" id="kpi-active-vus">0 / 0</div>
+          <footer class="kpi-sub" id="kpi-ramp-up">Ramp-up: 0s</footer>
+        </article>
+
+        <article class="kpi-card">
+          <header class="kpi-label">Total Requests</header>
+          <div class="kpi-value" id="kpi-total-reqs">0</div>
+          <footer class="kpi-sub" id="kpi-total-bytes">Transferred: 0 B</footer>
+        </article>
+
+        <article class="kpi-card">
+          <header class="kpi-label">Success / Error Rate</header>
+          <div class="kpi-value" id="kpi-success-rate">100.00%</div>
+          <footer class="kpi-sub" id="kpi-error-rate">Errors: 0 (0.00%)</footer>
+        </article>
+
+        <article class="kpi-card">
+          <header class="kpi-label">Window Latency (p50 / p95 / p99)</header>
+          <div class="kpi-value kpi-value-compact" id="kpi-latency-summary">0.00 / 0.00 / 0.00 ms</div>
+          <footer class="kpi-sub" id="kpi-latency-max">Window Max: 0.00 ms</footer>
+        </article>
+
+        <article class="kpi-card">
+          <header class="kpi-label">Transfer Rate</header>
+          <div class="kpi-value" id="kpi-transfer-rate">0.00 B/s</div>
+          <footer class="kpi-sub" id="kpi-timeout">Timeout: -- ms</footer>
+        </article>
+      </section>
+
+      <section id="final-summary-panel" class="panel summary-panel" hidden aria-labelledby="final-summary-heading">
+        <div class="panel-header">
+          <h2 id="final-summary-heading">Final Cumulative Benchmark Summary (HDR Histogram)</h2>
+          <span class="panel-meta" id="final-duration-meta">--</span>
+        </div>
+        <div class="summary-stats-strip" id="final-summary-grid"></div>
+      </section>
+
+      <section class="charts-grid" aria-label="Real-Time Time-Series Charts">
+        <article class="panel chart-panel chart-panel-wide">
+          <div class="panel-header">
+            <div>
+              <h2>Throughput &amp; Concurrency</h2>
+              <p class="panel-subtitle">Windowed RPS, Cumulative Avg RPS, and Active VUs</p>
+            </div>
+            <div class="chart-legend" aria-label="Throughput chart legend">
+              <span class="legend-item"><i class="swatch swatch-rps"></i>Window RPS</span>
+              <span class="legend-item"><i class="swatch swatch-avg"></i>Avg RPS</span>
+              <span class="legend-item"><i class="swatch swatch-vus"></i>Active VUs</span>
+            </div>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="chart-throughput" aria-label="Throughput and Concurrency over time"></canvas>
+            <div class="chart-tooltip" id="tooltip-throughput" hidden></div>
+          </div>
+        </article>
+
+        <article class="panel chart-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Windowed Latency Percentiles (ms)</h2>
+              <p class="panel-subtitle">Per-interval HDR histogram distribution</p>
+            </div>
+            <div class="chart-legend" aria-label="Latency chart legend">
+              <span class="legend-item"><i class="swatch swatch-p50"></i>p50</span>
+              <span class="legend-item"><i class="swatch swatch-p90"></i>p90</span>
+              <span class="legend-item"><i class="swatch swatch-p95"></i>p95</span>
+              <span class="legend-item"><i class="swatch swatch-p99"></i>p99</span>
+              <span class="legend-item"><i class="swatch swatch-max"></i>max</span>
+            </div>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="chart-latency" aria-label="Windowed latency percentiles over time"></canvas>
+            <div class="chart-tooltip" id="tooltip-latency" hidden></div>
+          </div>
+        </article>
+
+        <article class="panel chart-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Responses &amp; Errors by Class</h2>
+              <p class="panel-subtitle">Requests per tick by HTTP class &amp; transport errors</p>
+            </div>
+            <div class="chart-legend" aria-label="Status class chart legend">
+              <span class="legend-item"><i class="swatch swatch-2xx"></i>2xx</span>
+              <span class="legend-item"><i class="swatch swatch-4xx"></i>4xx</span>
+              <span class="legend-item"><i class="swatch swatch-5xx"></i>5xx</span>
+              <span class="legend-item"><i class="swatch swatch-net"></i>Transport</span>
+            </div>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="chart-errors" aria-label="Responses and errors by class over time"></canvas>
+            <div class="chart-tooltip" id="tooltip-errors" hidden></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="tables-grid" aria-label="Distribution and Configuration Breakdowns">
+        <article class="panel">
+          <div class="panel-header">
+            <h2 id="status-table-caption">HTTP Status Code Breakdown</h2>
+            <span class="panel-meta" id="status-total-meta">0 codes</span>
+          </div>
+          <div tabindex="0" role="region" aria-labelledby="status-table-caption" class="table-wrapper">
+            <table class="data-table table-status">
+              <caption class="sr-only">HTTP Status Code Breakdown</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Status Code</th>
+                  <th scope="col">Reason</th>
+                  <th scope="col">Count</th>
+                  <th scope="col">Share</th>
+                </tr>
+              </thead>
+              <tbody id="status-table-body">
+                <tr>
+                  <th scope="row">--</th>
+                  <td>Waiting for responses</td>
+                  <td>0</td>
+                  <td>0.00%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <h2 id="error-table-caption">Transport Error Breakdown</h2>
+            <span class="panel-meta" id="error-total-meta">0 errors</span>
+          </div>
+          <div tabindex="0" role="region" aria-labelledby="error-table-caption" class="table-wrapper">
+            <table class="data-table table-errors">
+              <caption class="sr-only">Transport Error Breakdown</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Category</th>
+                  <th scope="col">Count</th>
+                  <th scope="col">Share</th>
+                </tr>
+              </thead>
+              <tbody id="error-table-body">
+                <tr>
+                  <th scope="row">None</th>
+                  <td>0</td>
+                  <td>0.00%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel panel-wide">
+          <div class="panel-header">
+            <h2 id="meta-table-caption">Run Configuration &amp; Request Headers</h2>
+            <span class="panel-meta" id="meta-body-info">No body</span>
+          </div>
+          <div tabindex="0" role="region" aria-labelledby="meta-table-caption" class="table-wrapper">
+            <table class="data-table table-headers">
+              <caption class="sr-only">Run Configuration and Redacted Request Headers</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Header / Parameter</th>
+                  <th scope="col">Value</th>
+                </tr>
+              </thead>
+              <tbody id="meta-headers-body">
+                <tr>
+                  <th scope="row">Loading</th>
+                  <td>...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>

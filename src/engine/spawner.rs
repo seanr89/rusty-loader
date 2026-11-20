@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::config::BenchmarkConfig;
 use crate::engine::worker::Worker;
 use crate::metrics::event::MetricEvent;
+use crate::metrics::stats::LiveCounters;
 
 /// Computes the delay between consecutive worker spawns for a given `ramp_up` duration
 /// and `concurrency` level (`ramp_up / concurrency`).
@@ -47,6 +48,18 @@ pub async fn spawn_workers_with_timestamps(
     sender: UnboundedSender<MetricEvent>,
     cancel_token: CancellationToken,
 ) -> (Vec<JoinHandle<()>>, Vec<Instant>) {
+    spawn_workers_with_counters(config, client, sender, cancel_token, None).await
+}
+
+/// Spawns `config.concurrency` worker tasks, optionally tracking active worker count via `counters`,
+/// and records the exact [`Instant`] each worker was spawned.
+pub async fn spawn_workers_with_counters(
+    config: Arc<BenchmarkConfig>,
+    client: Client,
+    sender: UnboundedSender<MetricEvent>,
+    cancel_token: CancellationToken,
+    counters: Option<Arc<LiveCounters>>,
+) -> (Vec<JoinHandle<()>>, Vec<Instant>) {
     let concurrency = config.concurrency;
     let stagger_interval = compute_stagger_interval(config.ramp_up, concurrency);
 
@@ -73,13 +86,16 @@ pub async fn spawn_workers_with_timestamps(
         }
 
         let spawned_at = Instant::now();
-        let worker = Worker::new(
+        let mut worker = Worker::new(
             id,
             client.clone(),
             Arc::clone(&config),
             sender.clone(),
             cancel_token.clone(),
         );
+        if let Some(ref shared_counters) = counters {
+            worker = worker.with_counters(Arc::clone(shared_counters));
+        }
         let handle = tokio::spawn(worker.run());
 
         timestamps.push(spawned_at);

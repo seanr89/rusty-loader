@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::BenchmarkConfig;
 use crate::metrics::event::MetricEvent;
+use crate::metrics::stats::LiveCounters;
 
 /// Asynchronous load-generation worker that continuously sends HTTP requests
 /// using a shared [`reqwest::Client`] until cancelled.
@@ -19,6 +20,7 @@ pub struct Worker {
     pub config: Arc<BenchmarkConfig>,
     pub sender: UnboundedSender<MetricEvent>,
     pub cancel_token: CancellationToken,
+    pub counters: Option<Arc<LiveCounters>>,
 }
 
 impl Worker {
@@ -36,7 +38,14 @@ impl Worker {
             config,
             sender,
             cancel_token,
+            counters: None,
         }
+    }
+
+    /// Attaches shared [`LiveCounters`] for tracking active worker concurrency.
+    pub fn with_counters(mut self, counters: Arc<LiveCounters>) -> Self {
+        self.counters = Some(counters);
+        self
     }
 
     /// Returns the worker's numeric identifier.
@@ -66,18 +75,25 @@ impl Worker {
         let start = Instant::now();
 
         match self.client.execute(request).await {
-            Ok(response) => {
+            Ok(mut response) => {
                 let status = response.status();
-                match response.bytes().await {
-                    Ok(body_bytes) => {
-                        let latency = start.elapsed();
-                        let len = body_bytes.len();
-                        drop(body_bytes);
-                        MetricEvent::response(latency, status, len)
-                    }
-                    Err(err) => {
-                        let latency = start.elapsed();
-                        MetricEvent::error(latency, classify_reqwest_error(&err))
+                let mut total_len = 0usize;
+                loop {
+                    match response.chunk().await {
+                        Ok(Some(chunk)) => {
+                            total_len += chunk.len();
+                            drop(chunk);
+                        }
+                        Ok(None) => {
+                            let latency = start.elapsed();
+                            drop(response);
+                            return MetricEvent::response(latency, status, total_len);
+                        }
+                        Err(err) => {
+                            let latency = start.elapsed();
+                            drop(response);
+                            return MetricEvent::error(latency, classify_reqwest_error(&err));
+                        }
                     }
                 }
             }
@@ -91,6 +107,8 @@ impl Worker {
     /// Runs the continuous load generation loop until `cancel_token` is cancelled
     /// or the metrics receiver channel closes.
     pub async fn run(self) {
+        let _active_guard = self.counters.as_ref().map(|c| c.track_worker());
+
         loop {
             if self.cancel_token.is_cancelled() {
                 break;

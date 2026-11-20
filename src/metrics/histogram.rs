@@ -33,6 +33,11 @@ impl LatencyHistogram {
         let _ = self.histogram.record(micros);
     }
 
+    /// Resets all recorded counts and statistics in the histogram in-place without reallocating.
+    pub fn reset(&mut self) {
+        self.histogram.reset();
+    }
+
     /// Returns the total number of recorded latency samples.
     pub fn len(&self) -> u64 {
         self.histogram.len()

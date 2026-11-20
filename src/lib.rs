@@ -2,6 +2,8 @@ pub mod cli;
 pub mod client;
 pub mod config;
 pub mod engine;
+#[cfg(feature = "gui")]
+pub mod gui;
 pub mod metrics;
 pub mod os;
 pub mod reporter;

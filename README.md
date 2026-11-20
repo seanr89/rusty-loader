@@ -13,6 +13,7 @@ High-performance, concurrent command-line HTTP/REST API load testing tool writte
 - **Connection Reuse & Socket Optimization:** Configures `reqwest::Client` with `pool_max_idle_per_host(concurrency)`, `tcp_nodelay(true)`, `tcp_keepalive(60s)`, and disabled automatic redirects (`Policy::none()`) to prevent ephemeral port exhaustion and `TIME_WAIT` socket churn.
 - **Linear Ramp-Up Orchestration:** Supports staggered worker spawning (`--ramp-up`) at $\Delta t = \frac{\text{ramp\_up}}{\text{concurrency}}$ intervals to smoothly warm up target services.
 - **Live Terminal Telemetry & Summary Tables:** Displays a flicker-free `indicatif` progress bar with real-time 10 Hz sliding-window RPS and error counts, followed by color-coded `comfy-table` reports.
+- **Real-Time Embedded Web Dashboard (`--gui`):** Optionally starts a zero-CDN embedded `axum` web server streaming windowed (`250ms`) HDR latency percentiles, live RPS, active VUs, HTTP status distributions, and transport errors over Server-Sent Events (SSE) with mid-run history hydration and browser-triggered graceful stop.
 - **Graceful `Ctrl+C` (`SIGINT`) Shutdown:** Intercepts `SIGINT`, stops new request dispatches, allows in-flight requests up to a 3-second grace period to drain, and renders the partial benchmark report and JSON export without losing telemetry.
 - **CI/CD JSON Export:** Serializes full benchmark metadata and flattened `BenchmarkStats` to disk via `--output-json <PATH>`, automatically creating parent directories if needed.
 - **Pre-Flight OS Limit Inspection:** Automatically checks `RLIMIT_NOFILE` (`ulimit -n`) on Unix/macOS/Linux before starting and warns if the open file descriptor soft limit is below `4096`.
@@ -64,7 +65,8 @@ High-performance, concurrent command-line HTTP/REST API load testing tool writte
 | **Client** | `src/client.rs` | `HttpClientFactory` tuning `reqwest::Client` connection pools and TCP socket options |
 | **OS** | `src/os/` | Non-blocking `libc::getrlimit(RLIMIT_NOFILE)` inspection and `ulimit -n` warnings |
 | **Engine** | `src/engine/` | `TestController`, staggered worker spawner, `Worker` execution loop, and `SIGINT` handler |
-| **Metrics** | `src/metrics/` | `MetricEvent`, lockless `LiveCounters`, `LatencyHistogram`, and `MetricsCollector` actor |
+| **Metrics** | `src/metrics/` | `MetricEvent`, lockless `LiveCounters`, `LatencyHistogram`, `TelemetryHub`, and `MetricsCollector` |
+| **GUI** | `src/gui/` | Feature-gated (`gui`) embedded `axum` web dashboard, SSE stream, REST control API, and offline SPA assets |
 | **Reporter** | `src/reporter/` | `indicatif` live progress bar, `comfy-table` terminal tables, and `serde_json` file exporter |
 
 ---
@@ -106,6 +108,11 @@ Usage: rusty-loader [OPTIONS] --url <URL>
 | `-t` | `--timeout <TIMEOUT>` | `5000ms` | Per-request timeout (`100ms`, `5s`, or raw milliseconds `2000`) |
 | | `--ramp-up <DURATION>` | `0s` | Ramp-up time to linearly spawn workers up to `--concurrency` (`10s`, `1m`, or raw seconds) |
 | | `--output-json <PATH>` | `None` | Optional file path to export the full JSON benchmark report |
+| | `--gui` | `false` | Enable the embedded real-time web monitoring dashboard |
+| | `--gui-port <PORT>` | `8080` | Port to bind the embedded GUI server (`0` assigns an ephemeral OS port) |
+| | `--gui-bind <ADDR>` | `127.0.0.1` | IP address to bind the embedded GUI server (loopback-only by default) |
+| | `--gui-open` | `false` | Automatically open the GUI dashboard URL in the default browser on startup |
+| | `--gui-keep-alive` | `false` | Keep the GUI dashboard server running after completion until `Ctrl+C` |
 | `-h` | `--help` | | Print help information |
 | `-V` | `--version` | | Print version information |
 
@@ -172,6 +179,50 @@ rusty-loader \
   --duration 15s \
   --output-json artifacts/report.json
 ```
+
+---
+
+## Real-Time GUI Monitoring Dashboard (`--gui`)
+
+Enable the embedded web dashboard with `--gui` to monitor live throughput, active virtual users, windowed HDR latency percentiles (`p50`, `p90`, `p95`, `p99`, `max`), HTTP status distributions, and categorized transport errors from any modern browser—without external runtime or CDN dependencies.
+
+### Local Launch & Keep-Alive Inspection
+```bash
+rusty-loader \
+  --url "https://api.example.com/v1/ping" \
+  --concurrency 700 \
+  --ramp-up 10s \
+  --duration 60s \
+  --gui \
+  --gui-open \
+  --gui-keep-alive
+```
+- `--gui-port 0` lets the OS pick an unused port and prints the active URL on startup.
+- `--gui-keep-alive` keeps the dashboard available after the test finishes (until `Ctrl+C`) so you can inspect final charts and download the JSON report.
+- Sensitive request headers (`Authorization`, `Cookie`, `X-Api-Key`, tokens/secrets) and URL credentials are automatically redacted (`[REDACTED]`) in GUI responses.
+- Build without the embedded GUI server at any time using `cargo build --release --no-default-features`.
+
+### Remote Load Generators via SSH Port-Forwarding
+For headless Linux load generators, keep `--gui-bind 127.0.0.1` (default) and tunnel the dashboard over SSH:
+
+```bash
+# 1. Forward local port 8080 to the remote generator's loopback dashboard port
+ssh -L 8080:127.0.0.1:8080 user@remote-load-generator
+
+# 2. Run rusty-loader --gui on the remote host, then open http://127.0.0.1:8080 locally
+rusty-loader --url "https://api.example.com/v1/ping" --concurrency 700 --duration 60s --gui
+```
+
+### Embedded GUI HTTP & SSE Endpoints
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/` | `GET` | Self-contained HTML/CSS/Canvas 2D dashboard SPA (works offline) |
+| `/api/meta` | `GET` | Sanitized run configuration (`url`, `method`, `concurrency`, `phase`, redacted `headers`) |
+| `/api/history` | `GET` | Chronological ring buffer of historical `TelemetrySnapshot` ticks (`t = 0` hydration) |
+| `/api/stream` | `GET` | Server-Sent Events (`snapshot` every `250ms` + final `complete` event with `BenchmarkStats`) |
+| `/api/stop` | `POST` | Triggers graceful `CancellationToken` drain and partial summary generation |
+| `/api/export/json` | `GET` | Downloads `rusty-loader-report.json` with redacted headers |
 
 #### Sample JSON Report Schema
 ```json

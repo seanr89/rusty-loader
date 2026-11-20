@@ -1,7 +1,8 @@
 use crate::metrics::event::MetricEvent;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// Lockless atomic counters updated in real-time by the collector or workers
 /// and polled by the live terminal progress bar.
@@ -14,6 +15,7 @@ pub struct LiveCounters {
     pub other_statuses: AtomicU64,      // 1xx, 3xx, etc.
     pub transport_errors: AtomicU64,    // timeouts, connect errors
     pub total_bytes: AtomicU64,
+    pub active_workers: AtomicUsize,
 }
 
 impl LiveCounters {
@@ -85,6 +87,48 @@ impl LiveCounters {
     /// Reads the total number of response body bytes received so far.
     pub fn total_bytes(&self) -> u64 {
         self.total_bytes.load(Ordering::Relaxed)
+    }
+
+    /// Reads the current number of active worker tasks.
+    pub fn active_workers(&self) -> usize {
+        self.active_workers.load(Ordering::Relaxed)
+    }
+
+    /// Increments the active worker count and returns the updated value.
+    pub fn increment_active_workers(&self) -> usize {
+        self.active_workers.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// Decrements the active worker count and returns the updated value.
+    pub fn decrement_active_workers(&self) -> usize {
+        self.active_workers
+            .fetch_sub(1, Ordering::Relaxed)
+            .saturating_sub(1)
+    }
+
+    /// Creates an RAII guard that increments `active_workers` now and decrements it when dropped.
+    pub fn track_worker(self: &Arc<Self>) -> ActiveWorkerGuard {
+        ActiveWorkerGuard::new(Arc::clone(self))
+    }
+}
+
+/// RAII guard that increments `active_workers` on creation and decrements it on drop.
+#[derive(Debug)]
+pub struct ActiveWorkerGuard {
+    counters: Arc<LiveCounters>,
+}
+
+impl ActiveWorkerGuard {
+    /// Creates a new [`ActiveWorkerGuard`] and increments the active worker counter.
+    pub fn new(counters: Arc<LiveCounters>) -> Self {
+        counters.increment_active_workers();
+        Self { counters }
+    }
+}
+
+impl Drop for ActiveWorkerGuard {
+    fn drop(&mut self) {
+        self.counters.decrement_active_workers();
     }
 }
 
