@@ -5,7 +5,8 @@ use std::time::Duration;
 use clap::Parser;
 use reqwest::Method;
 use rusty_loader::cli::{parse_duration, parse_header, parse_timeout, Cli, HttpMethod};
-use rusty_loader::config::{BenchmarkConfig, ConfigError};
+use rusty_loader::config::{BenchmarkConfig, ConfigError, GuiConfig};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use tempfile::NamedTempFile;
 
 #[test]
@@ -316,4 +317,60 @@ fn test_ramp_up_and_bounds_validation() {
         BenchmarkConfig::from_cli(cli_zero_dur).unwrap_err(),
         ConfigError::InvalidDuration
     ));
+}
+
+#[test]
+fn test_gui_cli_flags_defaults_and_validation() {
+    // 1. Default GUI configuration when --gui flags are omitted
+    let cli_default =
+        Cli::try_parse_from(["rusty-loader", "--url", "https://api.example.com/v1/ping"])
+            .expect("CLI should parse without GUI flags");
+    let default_gui = cli_default
+        .gui_config()
+        .expect("default GUI config should validate");
+    assert!(!default_gui.enabled);
+    assert_eq!(default_gui.port, 8080);
+    assert_eq!(default_gui.bind_addr, IpAddr::V4(Ipv4Addr::LOCALHOST));
+    assert_eq!(
+        default_gui.socket_addr(),
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080)
+    );
+    assert!(!default_gui.open_browser);
+    assert!(!default_gui.keep_alive);
+
+    // 2. Explicit GUI flags including ephemeral port 0 and IPv6 loopback
+    let cli_custom = Cli::try_parse_from([
+        "rusty-loader",
+        "--url",
+        "https://api.example.com/v1/ping",
+        "--gui",
+        "--gui-port",
+        "0",
+        "--gui-bind",
+        "::1",
+        "--gui-open",
+        "--gui-keep-alive",
+    ])
+    .expect("CLI should parse custom GUI flags");
+
+    let custom_gui = GuiConfig::from_cli(&cli_custom).expect("custom GUI config should validate");
+    assert!(custom_gui.enabled);
+    assert_eq!(custom_gui.port, 0);
+    assert_eq!(custom_gui.bind_addr, IpAddr::V6(Ipv6Addr::LOCALHOST));
+    assert!(custom_gui.open_browser);
+    assert!(custom_gui.keep_alive);
+    BenchmarkConfig::from_cli(cli_custom).expect("BenchmarkConfig should accept valid GUI flags");
+
+    // 3. Invalid --gui-bind IP address should be rejected
+    let cli_bad_bind = Cli::try_parse_from([
+        "rusty-loader",
+        "--url",
+        "https://api.example.com/v1/ping",
+        "--gui",
+        "--gui-bind",
+        "not-an-ip-address",
+    ])
+    .unwrap();
+    let err = BenchmarkConfig::from_cli(cli_bad_bind).unwrap_err();
+    assert!(matches!(err, ConfigError::InvalidGuiBindAddress { .. }));
 }

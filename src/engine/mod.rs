@@ -18,7 +18,7 @@ use crate::client::HttpClientFactory;
 use crate::config::BenchmarkConfig;
 use crate::metrics::event::MetricEvent;
 use crate::metrics::stats::{BenchmarkStats, LiveCounters};
-use crate::metrics::spawn_collector;
+use crate::metrics::{spawn_collector_with_hub, TelemetryHub};
 
 /// Maximum grace period to wait for in-flight workers to finish after cancellation.
 pub const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(3);
@@ -30,6 +30,7 @@ pub struct TestController {
     client: Client,
     cancel_token: CancellationToken,
     counters: Arc<LiveCounters>,
+    telemetry_hub: Option<Arc<TelemetryHub>>,
 }
 
 impl TestController {
@@ -40,6 +41,7 @@ impl TestController {
             client,
             cancel_token: CancellationToken::new(),
             counters: Arc::new(LiveCounters::new()),
+            telemetry_hub: None,
         }
     }
 
@@ -59,6 +61,17 @@ impl TestController {
     pub fn with_counters(mut self, counters: Arc<LiveCounters>) -> Self {
         self.counters = counters;
         self
+    }
+
+    /// Attaches a [`TelemetryHub`] to publish real-time windowed telemetry snapshots.
+    pub fn with_telemetry_hub(mut self, hub: Arc<TelemetryHub>) -> Self {
+        self.telemetry_hub = Some(hub);
+        self
+    }
+
+    /// Returns a clone of the attached [`TelemetryHub`], if configured.
+    pub fn telemetry_hub(&self) -> Option<Arc<TelemetryHub>> {
+        self.telemetry_hub.clone()
     }
 
     /// Returns a clone of the shared [`LiveCounters`] updated in real-time during the run.
@@ -95,16 +108,22 @@ impl TestController {
         let cancel_token = self.cancel_token.clone();
 
         // 1. Spawn the metrics collector task.
-        let collector_handle = spawn_collector(rx, Arc::clone(&self.counters), start_time);
+        let collector_handle = spawn_collector_with_hub(
+            rx,
+            Arc::clone(&self.counters),
+            start_time,
+            self.telemetry_hub.clone(),
+        );
 
         // 2. Spawn the worker pool (immediately if ramp_up == 0, or concurrently across ramp_up).
         let (mut immediate_handles, mut immediate_timestamps, spawner_handle) =
             if self.config.ramp_up.is_zero() {
-                let (handles, timestamps) = spawner::spawn_workers_with_timestamps(
+                let (handles, timestamps) = spawner::spawn_workers_with_counters(
                     Arc::clone(&self.config),
                     self.client.clone(),
                     tx,
                     cancel_token.clone(),
+                    Some(Arc::clone(&self.counters)),
                 )
                 .await;
                 (handles, timestamps, None)
@@ -112,12 +131,14 @@ impl TestController {
                 let spawner_config = Arc::clone(&self.config);
                 let spawner_client = self.client.clone();
                 let spawner_token = cancel_token.clone();
+                let spawner_counters = Arc::clone(&self.counters);
                 let handle = tokio::spawn(async move {
-                    spawner::spawn_workers_with_timestamps(
+                    spawner::spawn_workers_with_counters(
                         spawner_config,
                         spawner_client,
                         tx,
                         spawner_token,
+                        Some(spawner_counters),
                     )
                     .await
                 });
@@ -132,6 +153,9 @@ impl TestController {
         }
 
         // 4. Signal all workers (and any in-progress ramp-up spawner) to stop.
+        if let Some(ref hub) = self.telemetry_hub {
+            hub.mark_draining();
+        }
         cancel_token.cancel();
 
         let (mut worker_handles, spawn_timestamps) = match spawner_handle {

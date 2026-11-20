@@ -1,4 +1,5 @@
 use std::fs;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -44,6 +45,56 @@ pub enum ConfigError {
 
     #[error("body file path after '@' cannot be empty")]
     EmptyBodyFilePath,
+
+    #[error("invalid GUI bind IP address '{addr}': {reason}")]
+    InvalidGuiBindAddress { addr: String, reason: String },
+}
+
+/// Validated configuration for the embedded real-time GUI monitoring server.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuiConfig {
+    pub enabled: bool,
+    pub port: u16,
+    pub bind_addr: IpAddr,
+    pub open_browser: bool,
+    pub keep_alive: bool,
+}
+
+impl Default for GuiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            port: 8080,
+            bind_addr: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            open_browser: false,
+            keep_alive: false,
+        }
+    }
+}
+
+impl GuiConfig {
+    /// Validates and constructs [`GuiConfig`] from parsed [`Cli`] arguments.
+    pub fn from_cli(cli: &Cli) -> Result<Self, ConfigError> {
+        let bind_addr = cli.gui_bind.trim().parse::<IpAddr>().map_err(|e| {
+            ConfigError::InvalidGuiBindAddress {
+                addr: cli.gui_bind.clone(),
+                reason: e.to_string(),
+            }
+        })?;
+
+        Ok(Self {
+            enabled: cli.gui,
+            port: cli.gui_port,
+            bind_addr,
+            open_browser: cli.gui_open,
+            keep_alive: cli.gui_keep_alive,
+        })
+    }
+
+    /// Returns the resolved [`SocketAddr`] (`bind_addr:port`) for the GUI HTTP server.
+    pub fn socket_addr(&self) -> SocketAddr {
+        SocketAddr::new(self.bind_addr, self.port)
+    }
 }
 
 /// Strongly typed, validated runtime configuration for a benchmark run.
@@ -63,6 +114,8 @@ pub struct BenchmarkConfig {
 impl BenchmarkConfig {
     /// Validates and converts parsed [`Cli`] arguments into a [`BenchmarkConfig`].
     pub fn from_cli(cli: Cli) -> Result<Self, ConfigError> {
+        let _ = GuiConfig::from_cli(&cli)?;
+
         let parsed_url = Url::parse(&cli.url).map_err(|e| ConfigError::InvalidUrl {
             url: cli.url.clone(),
             reason: e.to_string(),
@@ -160,5 +213,10 @@ impl Cli {
     /// Converts this [`Cli`] instance into a validated [`BenchmarkConfig`].
     pub fn into_config(self) -> Result<BenchmarkConfig, ConfigError> {
         BenchmarkConfig::from_cli(self)
+    }
+
+    /// Extracts and validates the [`GuiConfig`] from this [`Cli`] instance.
+    pub fn gui_config(&self) -> Result<GuiConfig, ConfigError> {
+        GuiConfig::from_cli(self)
     }
 }

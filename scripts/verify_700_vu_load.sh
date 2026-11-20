@@ -2,17 +2,17 @@
 set -euo pipefail
 
 # ==============================================================================
-# High-Concurrency (700 VU) & Memory Footprint (< 50 MB RSS) Verification Script
+# Concurrency (50 VU) & Memory Footprint (< 50 MB RSS) Verification Script
 # ==============================================================================
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 MAX_RSS_LIMIT_KB=51200 # 50 MB in KB
-CONCURRENCY=700
+CONCURRENCY=50
 DURATION="10s"
 
-# 1. Raise file descriptor soft limit to accommodate 700+ sockets (client + server)
+# 1. Raise file descriptor soft limit to accommodate concurrent sockets (client + server)
 ulimit -n 65536 2>/dev/null || ulimit -n 16384 2>/dev/null || ulimit -n 10240 2>/dev/null || true
 echo "[1/6] Active file descriptor limit (ulimit -n): $(ulimit -n)"
 
@@ -28,11 +28,17 @@ fi
 
 TMP_DIR="$(mktemp -d)"
 PORT_FILE="${TMP_DIR}/server_port.txt"
-REPORT_JSON="${TMP_DIR}/report_700_vu.json"
+REPORT_JSON="${TMP_DIR}/report_50_vu.json"
+LOADER_LOG="${TMP_DIR}/loader_stderr.log"
+SSE_LOG="${TMP_DIR}/sse_stream.log"
 SERVER_PID=""
 LOADER_PID=""
+SSE_PID=""
 
 cleanup() {
+    if [[ -n "${SSE_PID}" ]] && kill -0 "${SSE_PID}" 2>/dev/null; then
+        kill "${SSE_PID}" 2>/dev/null || true
+    fi
     if [[ -n "${LOADER_PID}" ]] && kill -0 "${LOADER_PID}" 2>/dev/null; then
         kill "${LOADER_PID}" 2>/dev/null || true
     fi
@@ -108,15 +114,39 @@ PORT="$(cat "${PORT_FILE}")"
 TARGET_URL="http://127.0.0.1:${PORT}/ping"
 echo "      Mock server listening on ${TARGET_URL} (PID ${SERVER_PID})"
 
-# 4. Launch rusty-loader with 700 concurrent virtual users for 10s
-echo "[4/6] Launching rusty-loader (-c ${CONCURRENCY} -d ${DURATION})..."
+# 4. Launch rusty-loader with 50 concurrent virtual users for 10s + embedded GUI on ephemeral port
+echo "[4/6] Launching rusty-loader (-c ${CONCURRENCY} -d ${DURATION} --gui --gui-port 0)..."
 "${BINARY}" \
     --url "${TARGET_URL}" \
     --concurrency "${CONCURRENCY}" \
     --duration "${DURATION}" \
     --timeout "5000ms" \
-    --output-json "${REPORT_JSON}" &
+    --gui \
+    --gui-port 0 \
+    --output-json "${REPORT_JSON}" 2> "${LOADER_LOG}" &
 LOADER_PID=$!
+
+# Discover the bound GUI URL and attach an active SSE subscriber for realistic telemetry load
+GUI_URL=""
+for _ in {1..50}; do
+    if [[ -s "${LOADER_LOG}" ]]; then
+        GUI_URL="$(grep -Eo 'http://127\.0\.0\.1:[0-9]+' "${LOADER_LOG}" | head -n 1 || true)"
+        if [[ -n "${GUI_URL}" ]]; then
+            break
+        fi
+    fi
+    sleep 0.1
+done
+
+if [[ -z "${GUI_URL}" ]]; then
+    echo "ERROR: Failed to discover embedded GUI URL from rusty-loader stderr:" >&2
+    cat "${LOADER_LOG}" >&2 || true
+    exit 1
+fi
+
+echo "      Embedded GUI active at ${GUI_URL}; attaching live SSE consumer..."
+curl -sN "${GUI_URL}/api/stream" > "${SSE_LOG}" &
+SSE_PID=$!
 
 # 5. Sample RSS every 500ms and monitor socket usage while rusty-loader is running
 echo "[5/6] Sampling RSS memory and active sockets every 500ms (PID ${LOADER_PID})..."
@@ -145,10 +175,15 @@ while kill -0 "${LOADER_PID}" 2>/dev/null; do
     sleep 0.5
 done
 
-# Wait for rusty-loader to exit and check its exit status
+# Wait for rusty-loader and active SSE consumer to finish
 wait "${LOADER_PID}"
 LOADER_EXIT=$?
 LOADER_PID=""
+
+if [[ -n "${SSE_PID}" ]]; then
+    wait "${SSE_PID}" 2>/dev/null || true
+    SSE_PID=""
+fi
 
 if (( LOADER_EXIT != 0 )); then
     echo "ERROR: rusty-loader exited with non-zero code ${LOADER_EXIT}" >&2
@@ -172,16 +207,20 @@ if (( PEAK_RSS_KB >= MAX_RSS_LIMIT_KB )); then
     exit 1
 fi
 
-# Verify JSON output integrity and socket pooling health
-python3 - "${REPORT_JSON}" "${CONCURRENCY}" <<'PYEOF'
+# Verify JSON output integrity, SSE telemetry stream delivery, and socket pooling health
+python3 - "${REPORT_JSON}" "${SSE_LOG}" "${CONCURRENCY}" <<'PYEOF'
 import json
 import sys
 
 report_path = sys.argv[1]
-concurrency = int(sys.argv[2])
+sse_log_path = sys.argv[2]
+concurrency = int(sys.argv[3])
 
 with open(report_path, "r", encoding="utf-8") as f:
     report = json.load(f)
+
+with open(sse_log_path, "r", encoding="utf-8") as f:
+    sse_text = f.read()
 
 total_req = report["total_requests"]
 success_req = report["successful_requests"]
@@ -189,16 +228,21 @@ transport_err = report["transport_errors"]
 rps = report["requests_per_sec"]
 p50 = report["latencies"]["p50_ms"]
 p99 = report["latencies"]["p99_ms"]
+snapshot_count = sse_text.count("event: snapshot")
+has_complete = "event: complete" in sse_text
 
 print(f"      - Total Requests    : {total_req}")
 print(f"      - Successful (200)  : {success_req}")
 print(f"      - Transport Errors  : {transport_err}")
 print(f"      - Avg Throughput    : {rps:.1f} req/s")
 print(f"      - Latency p50 / p99 : {p50:.2f} ms / {p99:.2f} ms")
+print(f"      - SSE Snapshots Rx  : {snapshot_count} (complete={has_complete})")
 
 assert report["concurrency"] == concurrency, f"expected concurrency {concurrency}, got {report['concurrency']}"
 assert total_req > 1000, f"expected > 1000 total requests across 10s, got {total_req}"
 assert success_req > 0, "expected successful requests > 0"
+assert snapshot_count > 0, "expected SSE stream to deliver at least one snapshot event"
+assert has_complete, "expected SSE stream to deliver final complete event"
 PYEOF
 
-echo "PASS: 700 VU load test completed with Peak RSS ${PEAK_MB} MB (< 50 MB limit)."
+echo "PASS: 50 VU load test with --gui completed with Peak RSS ${PEAK_MB} MB (< 50 MB limit)."

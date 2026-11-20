@@ -1,8 +1,10 @@
 use reqwest::StatusCode;
 use rusty_loader::metrics::{
-     spawn_collector, BenchmarkStats, LatencyDistribution, LatencyHistogram, LiveCounters,
-    MetricEvent, MetricsCollector,
+    spawn_collector, spawn_collector_with_hub, BenchmarkStats, LatencyDistribution,
+    LatencyHistogram, LiveCounters, MetricEvent, MetricsCollector, TelemetryHub, TelemetryPhase,
+    TelemetrySnapshot, WindowLatencyMs,
 };
+use tokio::sync::broadcast::error::RecvError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -280,4 +282,180 @@ fn test_collector_finalize_with_zero_duration() {
     assert_eq!(stats.total_requests, 1);
     assert_eq!(stats.requests_per_sec, 0.0);
     assert_eq!(stats.bytes_per_sec, 0.0);
+}
+
+#[test]
+fn test_active_worker_guard_tracks_concurrency_via_raii() {
+    let counters = Arc::new(LiveCounters::new());
+    assert_eq!(counters.active_workers(), 0);
+
+    {
+        let _g1 = counters.track_worker();
+        assert_eq!(counters.active_workers(), 1);
+        {
+            let _g2 = counters.track_worker();
+            assert_eq!(counters.active_workers(), 2);
+        }
+        assert_eq!(counters.active_workers(), 1);
+    }
+
+    assert_eq!(counters.active_workers(), 0);
+}
+
+#[test]
+fn test_windowed_histogram_resets_per_tick_while_cumulative_retains_all() {
+    let counters = Arc::new(LiveCounters::new());
+    let hub = Arc::new(TelemetryHub::new(
+        Duration::from_secs(10),
+        Duration::from_secs(2),
+    ));
+    let mut collector = MetricsCollector::new(Arc::clone(&counters))
+        .unwrap()
+        .with_telemetry_hub(Arc::clone(&hub))
+        .unwrap();
+    let start = Instant::now();
+
+    // Window 1: high latency samples (50 ms - 100 ms)
+    collector.record(MetricEvent::success(
+        Duration::from_millis(50),
+        StatusCode::OK,
+        100,
+    ));
+    collector.record(MetricEvent::success(
+        Duration::from_millis(100),
+        StatusCode::OK,
+        100,
+    ));
+
+    let snap1 = collector.take_window_snapshot(start, None);
+    assert_eq!(snap1.total_requests, 2);
+    assert!(
+        snap1.window_latency_ms.min >= 49.0 && snap1.window_latency_ms.max >= 99.0,
+        "window 1 should reflect 50-100ms samples: {:?}",
+        snap1.window_latency_ms
+    );
+
+    // Window 2: fast latency samples (2 ms - 4 ms) — reset must clear previous 100ms spike
+    collector.record(MetricEvent::success(
+        Duration::from_millis(2),
+        StatusCode::OK,
+        50,
+    ));
+    collector.record(MetricEvent::success(
+        Duration::from_millis(4),
+        StatusCode::OK,
+        50,
+    ));
+
+    let snap2 = collector.take_window_snapshot(start, None);
+    assert_eq!(snap2.total_requests, 4);
+    assert!(
+        snap2.window_latency_ms.max <= 5.0,
+        "window 2 max should reflect only new 2-4ms samples after reset, got {}",
+        snap2.window_latency_ms.max
+    );
+    assert!(
+        snap2.window_latency_ms.min >= 1.9 && snap2.window_latency_ms.min <= 2.1,
+        "window 2 min should be ~2ms, got {}",
+        snap2.window_latency_ms.min
+    );
+
+    // Cumulative BenchmarkStats must retain both Window 1 and Window 2 samples
+    let final_stats = collector.finalize(Duration::from_secs(1));
+    assert_eq!(final_stats.total_requests, 4);
+    assert!(final_stats.latencies.min_ms <= 2.1);
+    assert!(final_stats.latencies.max_ms >= 99.0);
+}
+
+#[tokio::test]
+async fn test_telemetry_hub_ring_buffer_bounding_and_non_blocking_lag() {
+    // 1. Verify ring buffer bounds history to capacity=3 and broadcast handles lag gracefully
+    let hub = TelemetryHub::with_options(
+        Duration::from_secs(10),
+        Duration::ZERO,
+        Duration::from_millis(50),
+        3,
+        2, // tiny broadcast capacity to exercise lag
+    );
+
+    let mut slow_rx = hub.subscribe();
+    let dropped_rx = hub.subscribe();
+    drop(dropped_rx); // dropping a receiver must not affect publishing
+
+    for i in 1..=5_u64 {
+        let snap = TelemetrySnapshot {
+            timestamp_ms: 1_700_000_000_000 + i * 50,
+            elapsed_secs: (i as f64) * 0.05,
+            duration_secs: 10.0,
+            phase: TelemetryPhase::Running,
+            active_workers: 10,
+            total_requests: i * 100,
+            window_rps: 2000.0,
+            avg_rps: 2000.0,
+            bytes_per_sec: 1024.0,
+            total_bytes: i * 1024,
+            successful_requests: i * 100,
+            client_errors: 0,
+            server_errors: 0,
+            other_statuses: 0,
+            transport_errors: 0,
+            window_latency_ms: WindowLatencyMs::default(),
+            status_distribution: HashMap::new(),
+            error_breakdown: HashMap::new(),
+        };
+        hub.publish_snapshot(snap);
+    }
+
+    // Ring buffer must retain only the newest 3 snapshots (requests 300, 400, 500)
+    let history = hub.history();
+    assert_eq!(history.len(), 3);
+    let counts: Vec<u64> = history.iter().map(|s| s.total_requests).collect();
+    assert_eq!(counts, vec![300, 400, 500]);
+
+    // Slow receiver lagged past capacity=2; receiving returns Lagged without blocking publisher
+    let first_recv = slow_rx.recv().await;
+    assert!(matches!(first_recv, Err(RecvError::Lagged(_))));
+    let next_recv = slow_rx.recv().await.expect("should still receive latest items");
+    assert!(next_recv.total_requests >= 400);
+
+    // 2. Verify spawn_collector_with_hub emits periodic snapshots and completion stats
+    let (tx, rx) = mpsc::unbounded_channel();
+    let counters = Arc::new(LiveCounters::new());
+    let live_hub = Arc::new(TelemetryHub::with_options(
+        Duration::from_secs(2),
+        Duration::ZERO,
+        Duration::from_millis(30),
+        100,
+        16,
+    ));
+    let mut sub_rx = live_hub.subscribe();
+    let start = Instant::now();
+    let collector_handle =
+        spawn_collector_with_hub(rx, Arc::clone(&counters), start, Some(Arc::clone(&live_hub)));
+
+    tx.send(MetricEvent::success(
+        Duration::from_millis(8),
+        StatusCode::OK,
+        64,
+    ))
+    .unwrap();
+    tokio::time::sleep(Duration::from_millis(60)).await;
+    tx.send(MetricEvent::success(
+        Duration::from_millis(12),
+        StatusCode::OK,
+        64,
+    ))
+    .unwrap();
+    drop(tx);
+
+    let stats = collector_handle.await.expect("collector panicked");
+    assert_eq!(stats.total_requests, 2);
+    assert!(live_hub.final_stats().is_some());
+    assert!(!live_hub.history().is_empty());
+
+    let streamed = tokio::time::timeout(Duration::from_millis(200), sub_rx.recv())
+        .await
+        .expect("timed out waiting for streamed snapshot")
+        .expect("broadcast channel closed early");
+    assert!(streamed.total_requests >= 1);
 }
