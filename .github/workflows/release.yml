@@ -1,0 +1,219 @@
+name: Release & Versioning
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Automated Semantic Version & Changelog Release
+    runs-on: ubuntu-latest
+    # Skip automated release commits to prevent infinite CI loops
+    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Determine next semantic version and generate changelog
+        id: semver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime
+          import os
+          import pathlib
+          import re
+          import subprocess
+          import sys
+
+          def git(*args: str) -> str:
+              return subprocess.check_output(["git", *args], text=True).strip()
+
+          cargo_toml = pathlib.Path("Cargo.toml")
+          cargo_text = cargo_toml.read_text(encoding="utf-8")
+          ver_match = re.search(r'(?m)^version\s*=\s*"(\d+)\.(\d+)\.(\d+)"', cargo_text)
+          if not ver_match:
+              sys.exit("Could not locate semantic version in Cargo.toml")
+
+          major, minor, patch = map(int, ver_match.groups())
+          current_version = f"{major}.{minor}.{patch}"
+
+          tags_raw = git("tag", "--list", "v[0-9]*.[0-9]*.[0-9]*", "--sort=-v:refname")
+          latest_tag = tags_raw.splitlines()[0].strip() if tags_raw else ""
+
+          rev_range = f"{latest_tag}..HEAD" if latest_tag else "HEAD"
+          log_fmt = "%H%x1f%s%x1f%b%x1e"
+          raw_log = git("log", rev_range, f"--pretty=format:{log_fmt}")
+
+          commits = []
+          for record in raw_log.split("\x1e"):
+              record = record.strip()
+              if not record:
+                  continue
+              parts = record.split("\x1f")
+              if len(parts) < 2:
+                  continue
+              sha = parts[0].strip()
+              subject = parts[1].strip()
+              body = parts[2].strip() if len(parts) > 2 else ""
+              if subject.startswith("chore(release):"):
+                  continue
+              commits.append((sha, subject, body))
+
+          if not commits:
+              print("No releasable commits since last tag.")
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+                  out.write("should_release=false\n")
+              sys.exit(0)
+
+          conv_re = re.compile(r"^([a-zA-Z]+)(?:\(([^)]+)\))?(!)?:\s*(.+)$")
+          bump_level = 1  # 1 = patch, 2 = minor, 3 = major
+
+          categories = {
+              "Breaking Changes": [],
+              "Features": [],
+              "Bug Fixes": [],
+              "Performance": [],
+              "Documentation": [],
+              "Maintenance": [],
+          }
+
+          for sha, subject, body in commits:
+              short_sha = sha[:7]
+              if subject.startswith("Merge pull request"):
+                  continue
+              m = conv_re.match(subject)
+              is_breaking = "BREAKING CHANGE:" in body or "BREAKING-CHANGE:" in body
+              if m:
+                  ctype, scope, bang, desc = m.groups()
+                  ctype_lower = ctype.lower()
+                  if bang == "!":
+                      is_breaking = True
+                  prefix = f"**{scope}**: " if scope else ""
+                  entry = f"- {prefix}{desc} (`{short_sha}`)"
+                  if is_breaking:
+                      bump_level = max(bump_level, 3)
+                      categories["Breaking Changes"].append(entry)
+                  elif ctype_lower == "feat":
+                      bump_level = max(bump_level, 2)
+                      categories["Features"].append(entry)
+                  elif ctype_lower == "fix":
+                      bump_level = max(bump_level, 1)
+                      categories["Bug Fixes"].append(entry)
+                  elif ctype_lower == "perf":
+                      bump_level = max(bump_level, 1)
+                      categories["Performance"].append(entry)
+                  elif ctype_lower == "docs":
+                      categories["Documentation"].append(entry)
+                  else:
+                      categories["Maintenance"].append(entry)
+              else:
+                  if is_breaking:
+                      bump_level = max(bump_level, 3)
+                      categories["Breaking Changes"].append(f"- {subject} (`{short_sha}`)")
+                  else:
+                      categories["Maintenance"].append(f"- {subject} (`{short_sha}`)")
+
+          if not any(categories.values()):
+              for sha, subject, _ in commits:
+                  categories["Maintenance"].append(f"- {subject} (`{sha[:7]}`)")
+
+          if bump_level == 3:
+              if major == 0:
+                  minor += 1
+                  patch = 0
+              else:
+                  major += 1
+                  minor = 0
+                  patch = 0
+          elif bump_level == 2:
+              minor += 1
+              patch = 0
+          else:
+              patch += 1
+
+          next_version = f"{major}.{minor}.{patch}"
+          today = datetime.date.today().isoformat()
+
+          section_lines = [f"## [{next_version}] - {today}", ""]
+          for cat_name, items in categories.items():
+              if items:
+                  section_lines.append(f"### {cat_name}")
+                  section_lines.extend(items)
+                  section_lines.append("")
+
+          new_section = "\n".join(section_lines).rstrip() + "\n\n"
+
+          # 1. Update Cargo.toml
+          updated_cargo = re.sub(
+              r'(?m)^version\s*=\s*"\d+\.\d+\.\d+"',
+              f'version = "{next_version}"',
+              cargo_text,
+              count=1,
+          )
+          cargo_toml.write_text(updated_cargo, encoding="utf-8")
+
+          # 2. Update CHANGELOG.md
+          changelog_path = pathlib.Path("CHANGELOG.md")
+          if changelog_path.exists():
+              existing = changelog_path.read_text(encoding="utf-8")
+              first_release_idx = existing.find("\n## [")
+              if first_release_idx != -1:
+                  header_part = existing[: first_release_idx + 1]
+                  rest_part = existing[first_release_idx + 1 :]
+                  updated_changelog = f"{header_part}{new_section}{rest_part}"
+              else:
+                  updated_changelog = existing.rstrip() + "\n\n" + new_section
+          else:
+              header = (
+                  "# Changelog\n\n"
+                  "All notable changes to `rusty-loader` are documented in this file.\n\n"
+                  "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),\n"
+                  "and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n\n"
+              )
+              updated_changelog = header + new_section
+
+          changelog_path.write_text(updated_changelog, encoding="utf-8")
+          pathlib.Path("/tmp/release_notes.md").write_text(new_section.strip() + "\n", encoding="utf-8")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write("should_release=true\n")
+              out.write(f"previous_version={current_version}\n")
+              out.write(f"next_version={next_version}\n")
+              out.write(f"tag=v{next_version}\n")
+          PY
+
+      - name: Update Cargo.lock and verify build & tests
+        if: steps.semver.outputs.should_release == 'true'
+        run: |
+          cargo check
+          cargo test --all-targets
+
+      - name: Commit version bump, tag release, and push to main
+        if: steps.semver.outputs.should_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock CHANGELOG.md
+          git commit -m "chore(release): v${{ steps.semver.outputs.next_version }} [skip ci]"
+          git tag -a "${{ steps.semver.outputs.tag }}" -m "Release ${{ steps.semver.outputs.tag }}"
+          git push origin HEAD:main --follow-tags
+
+      - name: Publish GitHub Release
+        if: steps.semver.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.semver.outputs.tag }}" \
+            --title "rusty-loader ${{ steps.semver.outputs.tag }}" \
+            --notes-file /tmp/release_notes.md

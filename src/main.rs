@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
+use rusty_loader::changelog::full_changelog;
 use rusty_loader::cli::Cli;
 use rusty_loader::config::{BenchmarkConfig, GuiConfig};
 use rusty_loader::engine::TestController;
@@ -18,6 +19,10 @@ use rusty_loader::reporter::{report_results, spawn_live_progress_bar};
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    if cli.changelog {
+        print!("{}", full_changelog());
+        return Ok(());
+    }
     let gui_config = GuiConfig::from_cli(&cli)?;
     let config = BenchmarkConfig::from_cli(cli)?;
 

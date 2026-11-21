@@ -374,3 +374,18 @@ fn test_gui_cli_flags_defaults_and_validation() {
     let err = BenchmarkConfig::from_cli(cli_bad_bind).unwrap_err();
     assert!(matches!(err, ConfigError::InvalidGuiBindAddress { .. }));
 }
+
+#[test]
+fn test_changelog_cli_flag_without_url() {
+    let cli = Cli::try_parse_from(["rusty-loader", "--changelog"])
+        .expect("--changelog should parse without requiring --url");
+    assert!(cli.changelog);
+    assert_eq!(cli.url, "");
+
+    // Without --changelog, omitting --url must still fail clap validation
+    let missing_url = Cli::try_parse_from(["rusty-loader"]);
+    assert!(
+        missing_url.is_err(),
+        "omitting both --url and --changelog must be rejected"
+    );
+}

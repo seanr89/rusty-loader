@@ -20,6 +20,7 @@
         <div class="brand-info">
           <div class="brand-title-row">
             <h1>rusty-loader</h1>
+            <span id="app-version-pill" class="version-pill">v0.1.0</span>
             <span id="phase-badge" class="badge badge-running" role="status" aria-live="polite">Connecting</span>
           </div>
           <div class="target-row">
@@ -48,6 +49,9 @@
           <a id="export-json-btn" href="/api/export/json" download="rusty-loader-report.json" class="btn btn-secondary">
             Export JSON
           </a>
+          <button id="about-btn" type="button" class="btn btn-secondary">
+            About
+          </button>
           <button id="theme-toggle" type="button" class="btn btn-secondary theme-toggle">
             <span class="theme-opt theme-opt-light" aria-hidden="true">&#9728;</span>
             <span class="theme-opt theme-opt-light sr-only">Switch to light theme</span>
@@ -250,6 +254,53 @@
       </section>
     </main>
   </div>
+
+  <dialog id="about-dialog" class="about-dialog" closedby="any" aria-labelledby="about-dialog-title">
+    <div class="about-dialog-inner">
+      <header class="about-dialog-header">
+        <div class="about-brand-cluster">
+          <div class="brand-mark" aria-hidden="true">RL</div>
+          <div>
+            <div class="about-title-row">
+              <h2 id="about-dialog-title">About rusty-loader</h2>
+              <span id="about-version-badge" class="badge badge-completed">v0.1.0</span>
+            </div>
+            <p id="about-description" class="panel-subtitle">
+              High-performance, concurrent API load testing CLI written in Rust
+            </p>
+          </div>
+        </div>
+        <form method="dialog">
+          <button type="submit" value="close" class="btn btn-secondary" autofocus>Close</button>
+        </form>
+      </header>
+
+      <div class="about-dialog-body">
+        <section class="about-section" aria-labelledby="about-latest-heading">
+          <div class="panel-header">
+            <h3 id="about-latest-heading">Latest Versioned Change</h3>
+            <span id="about-latest-meta" class="panel-meta">--</span>
+          </div>
+          <div id="about-latest-card" class="release-card release-card-highlight">
+            <p class="panel-subtitle">Loading latest release notes...</p>
+          </div>
+        </section>
+
+        <section class="about-section" aria-labelledby="about-changelog-heading">
+          <div class="panel-header">
+            <div>
+              <h3 id="about-changelog-heading">Provisioned Changelog</h3>
+              <p class="panel-subtitle">Embedded in binary for offline verification (<code>--changelog</code>)</p>
+            </div>
+            <button id="toggle-changelog-btn" type="button" class="btn btn-secondary" aria-expanded="false" aria-controls="about-changelog-container">
+              View Full Changelog
+            </button>
+          </div>
+          <div id="about-changelog-container" class="changelog-list" hidden></div>
+        </section>
+      </div>
+    </div>
+  </dialog>
 
   <script src="/assets/app.js" defer></script>
 </body>

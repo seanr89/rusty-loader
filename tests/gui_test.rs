@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Method, StatusCode, Url};
+use rusty_loader::changelog::{AboutPayload, ChangelogPayload, APP_NAME, APP_VERSION};
 use rusty_loader::config::{BenchmarkConfig, GuiConfig};
 use rusty_loader::engine::TestController;
 use rusty_loader::gui::{start_gui_server, MetaResponse};
@@ -223,6 +224,41 @@ async fn test_gui_static_assets_and_meta_header_redaction() {
         meta.headers.get("x-trace-id").map(String::as_str),
         Some("trace-42")
     );
+
+    // 3. /api/about and /api/changelog must return embedded version & changelog offline
+    let about_resp = client
+        .get(format!("{base_url}/api/about"))
+        .send()
+        .await
+        .expect("GET /api/about");
+    assert_eq!(about_resp.status(), StatusCode::OK);
+    let about: AboutPayload = about_resp.json().await.expect("valid AboutPayload JSON");
+    assert_eq!(about.name, APP_NAME);
+    assert_eq!(about.version, APP_VERSION);
+    let latest = about
+        .latest_change
+        .expect("latest_change should be populated from embedded CHANGELOG.md");
+    assert_eq!(latest.version, APP_VERSION);
+    assert!(!latest.notes.is_empty());
+
+    let changelog_resp = client
+        .get(format!("{base_url}/api/changelog"))
+        .send()
+        .await
+        .expect("GET /api/changelog");
+    assert_eq!(changelog_resp.status(), StatusCode::OK);
+    let changelog: ChangelogPayload = changelog_resp
+        .json()
+        .await
+        .expect("valid ChangelogPayload JSON");
+    assert_eq!(changelog.current_version, APP_VERSION);
+    assert!(changelog.raw_markdown.contains("# Changelog"));
+    assert!(!changelog.releases.is_empty());
+    assert_eq!(changelog.releases[0].version, latest.version);
+
+    // Verify About dialog markup exists in index.html
+    assert!(html.contains(r#"id="about-dialog""#));
+    assert!(html.contains(r#"id="about-btn""#));
 
     server_handle.shutdown().await;
 }
