@@ -60,7 +60,8 @@ High-performance, concurrent command-line HTTP/REST API load testing tool writte
 
 | Module | Path | Responsibility |
 | :--- | :--- | :--- |
-| **CLI** | `src/cli.rs` | `clap` derive parser, HTTP method enum, human-friendly duration/timeout/header parsers |
+| **Changelog** | `src/changelog.rs` | Compile-time embedded `CHANGELOG.md` (`include_str!`), release parser, and `/api/about` + `/api/changelog` models |
+| **CLI** | `src/cli.rs` | `clap` derive parser, HTTP method enum, `--changelog` flag, human-friendly duration/timeout/header parsers |
 | **Config** | `src/config.rs` | Validated `BenchmarkConfig` builder, URL/scheme checks, and `@file` body payload resolution |
 | **Client** | `src/client.rs` | `HttpClientFactory` tuning `reqwest::Client` connection pools and TCP socket options |
 | **OS** | `src/os/` | Non-blocking `libc::getrlimit(RLIMIT_NOFILE)` inspection and `ulimit -n` warnings |
@@ -113,6 +114,7 @@ Usage: rusty-loader [OPTIONS] --url <URL>
 | | `--gui-bind <ADDR>` | `127.0.0.1` | IP address to bind the embedded GUI server (loopback-only by default) |
 | | `--gui-open` | `false` | Automatically open the GUI dashboard URL in the default browser on startup |
 | | `--gui-keep-alive` | `false` | Keep the GUI dashboard server running after completion until `Ctrl+C` |
+| | `--changelog` | `false` | Print the embedded `CHANGELOG.md` release notes and exit |
 | `-h` | `--help` | | Print help information |
 | `-V` | `--version` | | Print version information |
 
@@ -219,6 +221,8 @@ rusty-loader --url "https://api.example.com/v1/ping" --concurrency 700 --duratio
 | :--- | :--- | :--- |
 | `/` | `GET` | Self-contained HTML/CSS/Canvas 2D dashboard SPA (works offline) |
 | `/api/meta` | `GET` | Sanitized run configuration (`url`, `method`, `concurrency`, `phase`, redacted `headers`) |
+| `/api/about` | `GET` | Application name, current version (`CARGO_PKG_VERSION`), and latest versioned release entry |
+| `/api/changelog` | `GET` | Structured release list and raw embedded `CHANGELOG.md` markdown |
 | `/api/history` | `GET` | Chronological ring buffer of historical `TelemetrySnapshot` ticks (`t = 0` hydration) |
 | `/api/stream` | `GET` | Server-Sent Events (`snapshot` every `250ms` + final `complete` event with `BenchmarkStats`) |
 | `/api/stop` | `POST` | Triggers graceful `CancellationToken` drain and partial summary generation |

@@ -34,6 +34,9 @@
 
   const state = {
     meta: null,
+    about: null,
+    changelog: null,
+    changelogExpanded: false,
     snapshots: [],
     renderedSnapshots: [],
     finalStats: null,
@@ -51,6 +54,7 @@
 
   const els = {
     metaColorScheme: document.querySelector('meta[name="color-scheme"]'),
+    appVersionPill: document.getElementById("app-version-pill"),
     phaseBadge: document.getElementById("phase-badge"),
     metaMethod: document.getElementById("meta-method"),
     metaUrl: document.getElementById("meta-url"),
@@ -59,6 +63,14 @@
     runProgress: document.getElementById("run-progress"),
     runProgressFill: document.getElementById("run-progress-fill"),
     pauseChartsBtn: document.getElementById("pause-charts-btn"),
+    aboutBtn: document.getElementById("about-btn"),
+    aboutDialog: document.getElementById("about-dialog"),
+    aboutVersionBadge: document.getElementById("about-version-badge"),
+    aboutDescription: document.getElementById("about-description"),
+    aboutLatestMeta: document.getElementById("about-latest-meta"),
+    aboutLatestCard: document.getElementById("about-latest-card"),
+    toggleChangelogBtn: document.getElementById("toggle-changelog-btn"),
+    aboutChangelogContainer: document.getElementById("about-changelog-container"),
     themeToggleBtn: document.getElementById("theme-toggle"),
     stopRunBtn: document.getElementById("stop-run-btn"),
     connectionBanner: document.getElementById("connection-banner"),
@@ -874,6 +886,192 @@
     updateMetaDisplay(meta);
   }
 
+  async function fetchAbout() {
+    const resp = await fetch("/api/about", { cache: "no-store" });
+    if (!resp.ok) {
+      throw new Error(`Failed to fetch about payload (${resp.status})`);
+    }
+    const about = await resp.json();
+    updateAboutDisplay(about);
+  }
+
+  async function fetchChangelog() {
+    const resp = await fetch("/api/changelog", { cache: "no-store" });
+    if (!resp.ok) {
+      throw new Error(`Failed to fetch changelog (${resp.status})`);
+    }
+    const changelog = await resp.json();
+    state.changelog = changelog;
+    renderFullChangelog(changelog);
+  }
+
+  function renderReleaseNotesInto(container, entry, includeHeader) {
+    container.replaceChildren();
+    if (!entry) {
+      const empty = document.createElement("p");
+      empty.className = "panel-subtitle";
+      empty.textContent = "No release notes available.";
+      container.appendChild(empty);
+      return;
+    }
+
+    if (includeHeader) {
+      const headerRow = document.createElement("div");
+      headerRow.className = "release-card-header";
+      const verTag = document.createElement("span");
+      verTag.className = "release-version-tag mono";
+      verTag.textContent = `v${entry.version}`;
+      headerRow.appendChild(verTag);
+
+      if (entry.date) {
+        const dateTag = document.createElement("span");
+        dateTag.className = "release-date-tag mono";
+        dateTag.textContent = entry.date;
+        headerRow.appendChild(dateTag);
+      }
+      container.appendChild(headerRow);
+    }
+
+    const lines = String(entry.notes || "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    let currentList = null;
+    for (const line of lines) {
+      if (line.startsWith("### ")) {
+        const cat = document.createElement("h4");
+        cat.className = "release-category-title";
+        cat.textContent = line.slice(4).trim();
+        container.appendChild(cat);
+        currentList = null;
+      } else if (line.startsWith("- ") || line.startsWith("* ")) {
+        if (!currentList) {
+          currentList = document.createElement("ul");
+          currentList.className = "release-notes-list";
+          container.appendChild(currentList);
+        }
+        const li = document.createElement("li");
+        li.textContent = line.slice(2).trim();
+        currentList.appendChild(li);
+      } else {
+        const p = document.createElement("p");
+        p.className = "panel-subtitle";
+        p.textContent = line;
+        container.appendChild(p);
+        currentList = null;
+      }
+    }
+  }
+
+  function updateAboutDisplay(about) {
+    state.about = about;
+    const versionText = `v${about.version || "0.1.0"}`;
+    if (els.appVersionPill) {
+      els.appVersionPill.textContent = versionText;
+    }
+    if (els.aboutVersionBadge) {
+      els.aboutVersionBadge.textContent = versionText;
+    }
+    if (els.aboutDescription && about.description) {
+      els.aboutDescription.textContent = about.description;
+    }
+    if (els.aboutLatestMeta) {
+      if (about.latest_change) {
+        const datePart = about.latest_change.date ? ` (${about.latest_change.date})` : "";
+        els.aboutLatestMeta.textContent = `v${about.latest_change.version}${datePart}`;
+      } else {
+        els.aboutLatestMeta.textContent = versionText;
+      }
+    }
+    if (els.aboutLatestCard) {
+      renderReleaseNotesInto(els.aboutLatestCard, about.latest_change, false);
+    }
+  }
+
+  function renderFullChangelog(changelog) {
+    if (!els.aboutChangelogContainer) return;
+    els.aboutChangelogContainer.replaceChildren();
+
+    const releases = (changelog && Array.isArray(changelog.releases)) ? changelog.releases : [];
+    if (releases.length === 0) {
+      const card = document.createElement("div");
+      card.className = "release-card";
+      const pre = document.createElement("pre");
+      pre.className = "mono";
+      pre.textContent = (changelog && changelog.raw_markdown) ? changelog.raw_markdown : "No changelog entries found.";
+      card.appendChild(pre);
+      els.aboutChangelogContainer.appendChild(card);
+      return;
+    }
+
+    for (const entry of releases) {
+      const card = document.createElement("article");
+      card.className = "release-card";
+      renderReleaseNotesInto(card, entry, true);
+      els.aboutChangelogContainer.appendChild(card);
+    }
+  }
+
+  function initAboutModal() {
+    const dialog = els.aboutDialog;
+    if (!dialog) return;
+
+    if (els.aboutBtn) {
+      els.aboutBtn.addEventListener("click", () => {
+        if (!state.about) {
+          fetchAbout().catch(() => {});
+        }
+        dialog.showModal();
+      });
+    }
+
+    dialog.addEventListener("close", () => {
+      dialog.returnValue = "";
+    });
+
+    // Fallback for browsers without native <dialog closedby="any"> support
+    if (!("closedBy" in HTMLDialogElement.prototype)) {
+      dialog.addEventListener("click", (event) => {
+        if (event.target !== dialog) return;
+        const rect = dialog.getBoundingClientRect();
+        const isDialogContent =
+          rect.top <= event.clientY &&
+          event.clientY <= rect.top + rect.height &&
+          rect.left <= event.clientX &&
+          event.clientX <= rect.left + rect.width;
+        if (isDialogContent) return;
+        dialog.close();
+      });
+    }
+
+    if (els.toggleChangelogBtn && els.aboutChangelogContainer) {
+      els.toggleChangelogBtn.addEventListener("click", async () => {
+        state.changelogExpanded = !state.changelogExpanded;
+        els.toggleChangelogBtn.setAttribute(
+          "aria-expanded",
+          state.changelogExpanded ? "true" : "false"
+        );
+        els.toggleChangelogBtn.textContent = state.changelogExpanded
+          ? "Hide Full Changelog"
+          : "View Full Changelog";
+        els.aboutChangelogContainer.hidden = !state.changelogExpanded;
+
+        if (state.changelogExpanded && !state.changelog) {
+          try {
+            await fetchChangelog();
+          } catch (err) {
+            els.aboutChangelogContainer.replaceChildren();
+            const errMsg = document.createElement("p");
+            errMsg.className = "panel-subtitle";
+            errMsg.textContent = `Unable to load changelog: ${err.message}`;
+            els.aboutChangelogContainer.appendChild(errMsg);
+          }
+        }
+      });
+    }
+  }
+
   async function fetchHistory() {
     const resp = await fetch("/api/history", { cache: "no-store" });
     if (!resp.ok) {
@@ -976,7 +1174,10 @@
   async function boot() {
     initThemeControls();
     initButtons();
+    initAboutModal();
     initCharts();
+
+    fetchAbout().catch(() => {});
 
     try {
       await Promise.all([fetchMeta(), fetchHistory()]);

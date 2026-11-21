@@ -16,8 +16,17 @@ use serde::{Deserialize, Serialize};
 )]
 pub struct Cli {
     /// Target endpoint URL (e.g. https://api.example.com/v1/ping)
-    #[arg(short = 'u', long = "url", required = true)]
+    #[arg(
+        short = 'u',
+        long = "url",
+        required_unless_present = "changelog",
+        default_value = ""
+    )]
     pub url: String,
+
+    /// Print the embedded CHANGELOG.md release notes and exit
+    #[arg(long = "changelog", default_value_t = false)]
+    pub changelog: bool,
 
     /// Number of concurrent virtual users / workers
     #[arg(short = 'c', long = "concurrency", default_value_t = 700)]

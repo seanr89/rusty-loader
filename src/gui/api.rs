@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 
+use crate::changelog::{about_payload, changelog_payload, AboutPayload, ChangelogPayload};
 use crate::config::BenchmarkConfig;
 use crate::metrics::snapshot::{TelemetryHub, TelemetryPhase, TelemetrySnapshot};
 use crate::metrics::stats::{BenchmarkStats, LatencyDistribution, LiveCounters};
@@ -60,6 +61,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/assets/styles.css", get(serve_styles))
         .route("/assets/app.js", get(serve_app_js))
         .route("/api/meta", get(get_meta))
+        .route("/api/about", get(get_about))
+        .route("/api/changelog", get(get_changelog))
         .route("/api/history", get(get_history))
         .route("/api/stream", get(stream_telemetry))
         .route("/api/stop", post(post_stop))
@@ -164,6 +167,14 @@ async fn get_meta(State(state): State<AppState>) -> Json<MetaResponse> {
         body_size_bytes: state.config.body_bytes().map(<[u8]>::len).unwrap_or(0),
         phase,
     })
+}
+
+async fn get_about() -> Json<AboutPayload> {
+    Json(about_payload())
+}
+
+async fn get_changelog() -> Json<ChangelogPayload> {
+    Json(changelog_payload())
 }
 
 async fn get_history(State(state): State<AppState>) -> Json<Vec<TelemetrySnapshot>> {
