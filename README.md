@@ -90,6 +90,46 @@ This produces two identical optimized binaries in `target/release/`:
 cargo install --path .
 ```
 
+### macOS Application Bundle (Makefile)
+
+You can package `rusty-loader` as a signed macOS `.app` bundle (`rusty-loader.app`) with version metadata populated automatically from `Cargo.toml`, install it locally, and update an existing installation in-place via the root `Makefile`:
+
+```bash
+# Build the release binary (cargo build --release)
+make build
+
+# Build and assemble target/release/bundle/rusty-loader.app
+make macos-bundle
+
+# Install signed rusty-loader.app into /Applications (requires write access or sudo)
+make macos-install
+
+# Rebuild, stop any running instance, atomically replace, re-sign, and refresh LaunchServices
+make macos-update
+
+# Remove rusty-loader.app from APP_DIR
+make macos-uninstall
+```
+
+#### Installing or Updating in User Applications (`~/Applications`)
+By default `APP_DIR` is `/Applications`. Override `APP_DIR` to install or update without `sudo` in your user Applications folder:
+
+```bash
+make macos-install APP_DIR=~/Applications
+make macos-update APP_DIR=~/Applications
+```
+
+> **Note:** `make macos-update` requires an existing `rusty-loader.app` in `APP_DIR` and will fail with an actionable prompt if you haven't run `make macos-install` yet.
+
+#### Code Signing & Gatekeeper Notes
+- By default, bundles are signed locally with an **ad-hoc** signature (`CODESIGN_IDENTITY="-"`).
+- To sign with an Apple Developer certificate instead, override `CODESIGN_IDENTITY`:
+  ```bash
+  make macos-install CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+  ```
+- When launching a locally built, ad-hoc signed `.app` from Finder or Spotlight for the first time, macOS Gatekeeper may block or warn about an unidentified developer. You can allow it under **System Settings → Privacy & Security → Open Anyway** (or right-click / Control-click the app in Finder and choose **Open**).
+- Launching `rusty-loader.app` from Finder or Spotlight opens a macOS Terminal window with `rusty-loader` added to `PATH` and prints `--version` and `--help`. Invoking the bundle entrypoint directly from a shell with CLI flags forwards all arguments transparently to the binary.
+
 ---
 
 ## CLI Options Reference
