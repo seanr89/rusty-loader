@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MACOS_DIR="$(cd "$(dirname "$0")" && pwd)"
+BIN="$MACOS_DIR/{{APP_NAME}}"
+
+if [ "$#" -gt 0 ]; then
+  case "$1" in
+    -psn_*) ;;
+    *)
+      exec "$BIN" "$@"
+      ;;
+  esac
+fi
+
+exec osascript - "$MACOS_DIR" "$BIN" <<'EOF'
+on run argv
+  set macosDir to item 1 of argv
+  set binPath to item 2 of argv
+  set cmd to "export PATH=" & quoted form of macosDir & ":\"$PATH\"; " & quoted form of binPath & " --version && echo && " & quoted form of binPath & " --help"
+  tell application "Terminal"
+    activate
+    do script cmd
+  end tell
+end run
+EOF
