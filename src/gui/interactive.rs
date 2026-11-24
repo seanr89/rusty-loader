@@ -23,12 +23,13 @@ use tokio::sync::oneshot;
 use crate::changelog::{about_payload, changelog_payload, APP_VERSION};
 use crate::config::{validate_input, BenchmarkConfigInput, ValidationReport};
 use crate::gui::api::{
-    serve_app_js, serve_index, serve_styles, GuiMode, MetaResponse,
+    render_export_download, serve_app_js, serve_index, serve_styles, GuiMode, MetaResponse,
 };
 use crate::gui::manager::{RunLifecycleEvent, RunManager, RunManagerError};
 use crate::metrics::snapshot::TelemetrySnapshot;
 use crate::os::OsLimits;
 use crate::presets::{format_cli_command, PresetStore, PresetUpsertRequest};
+use crate::reporter::{write_export_bytes, ExportFormat};
 
 const SESSION_HEADER: &str = "x-rl-session";
 const SESSION_COOKIE_NAME: &str = "rl_session";
@@ -38,7 +39,8 @@ pub enum NativeDialogRequest {
     OpenBodyFile {
         resp: oneshot::Sender<Option<PathBuf>>,
     },
-    SaveJsonFile {
+    SaveReportFile {
+        format: ExportFormat,
         default_name: String,
         resp: oneshot::Sender<Option<PathBuf>>,
     },
@@ -107,6 +109,18 @@ struct StartRunRequest {
 }
 
 #[derive(Debug, Deserialize)]
+struct SaveReportDialogRequest {
+    #[serde(default = "default_export_format")]
+    format: ExportFormat,
+    #[serde(default)]
+    run_id: Option<String>,
+}
+
+const fn default_export_format() -> ExportFormat {
+    ExportFormat::Json
+}
+
+#[derive(Debug, Deserialize)]
 struct SaveJsonDialogRequest {
     #[serde(default)]
     run_id: Option<String>,
@@ -120,9 +134,10 @@ struct OpenBodyFileResponse {
 }
 
 #[derive(Debug, Serialize)]
-struct SaveJsonDialogResponse {
+struct SaveReportDialogResponse {
     cancelled: bool,
     path: Option<String>,
+    format: ExportFormat,
 }
 
 /// Builds the Axum [`Router`] for the interactive desktop / web configuration & telemetry UI.
@@ -133,12 +148,15 @@ pub fn build_interactive_router(state: InteractiveState) -> Router {
         .route("/api/runs/{id}", get(get_run_detail))
         .route("/api/stop", post(post_stop_run))
         .route("/api/export/json", get(export_interactive_json))
+        .route("/api/export/csv", get(export_interactive_csv))
+        .route("/api/export/pdf", get(export_interactive_pdf))
         .route("/api/presets", get(get_presets).post(post_create_preset))
         .route(
             "/api/presets/{id}",
             put(put_update_preset).delete(delete_preset),
         )
         .route("/api/dialog/open-body-file", post(post_open_body_file))
+        .route("/api/dialog/save-report", post(post_save_report_dialog))
         .route("/api/dialog/save-json", post(post_save_json_dialog))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -391,11 +409,12 @@ async fn get_run_detail(
     }
 }
 
-async fn export_interactive_json(
-    State(state): State<InteractiveState>,
-    Query(query): Query<RunIdQuery>,
+async fn export_interactive_format(
+    state: &InteractiveState,
+    run_id: Option<&str>,
+    format: ExportFormat,
 ) -> Response {
-    let Some(report) = state.manager.export_report(query.run_id.as_deref()) else {
+    let Some(report) = state.manager.export_report_data(run_id) else {
         return (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "no benchmark report available to export" })),
@@ -403,29 +422,28 @@ async fn export_interactive_json(
             .into_response();
     };
 
-    match serde_json::to_string_pretty(&report) {
-        Ok(payload) => {
-            let mut response = (StatusCode::OK, payload).into_response();
-            response.headers_mut().insert(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static("application/json; charset=utf-8"),
-            );
-            response.headers_mut().insert(
-                header::CONTENT_DISPOSITION,
-                HeaderValue::from_static("attachment; filename=\"rusty-loader-report.json\""),
-            );
-            response.headers_mut().insert(
-                header::CACHE_CONTROL,
-                HeaderValue::from_static("no-store"),
-            );
-            response
-        }
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("failed to serialize benchmark report: {err}"),
-        )
-            .into_response(),
-    }
+    render_export_download(&report, format)
+}
+
+async fn export_interactive_json(
+    State(state): State<InteractiveState>,
+    Query(query): Query<RunIdQuery>,
+) -> Response {
+    export_interactive_format(&state, query.run_id.as_deref(), ExportFormat::Json).await
+}
+
+async fn export_interactive_csv(
+    State(state): State<InteractiveState>,
+    Query(query): Query<RunIdQuery>,
+) -> Response {
+    export_interactive_format(&state, query.run_id.as_deref(), ExportFormat::Csv).await
+}
+
+async fn export_interactive_pdf(
+    State(state): State<InteractiveState>,
+    Query(query): Query<RunIdQuery>,
+) -> Response {
+    export_interactive_format(&state, query.run_id.as_deref(), ExportFormat::Pdf).await
 }
 
 async fn get_presets(State(state): State<InteractiveState>) -> Response {
@@ -529,9 +547,10 @@ async fn post_open_body_file(State(state): State<InteractiveState>) -> Response 
     }
 }
 
-async fn post_save_json_dialog(
-    State(state): State<InteractiveState>,
-    payload: Option<Json<SaveJsonDialogRequest>>,
+async fn save_report_with_dialog(
+    state: InteractiveState,
+    format: ExportFormat,
+    run_id: Option<String>,
 ) -> Response {
     let Some(ref dispatcher) = state.dialog_dispatcher else {
         return (
@@ -543,8 +562,7 @@ async fn post_save_json_dialog(
             .into_response();
     };
 
-    let run_id = payload.and_then(|Json(req)| req.run_id);
-    let Some(report) = state.manager.export_report(run_id.as_deref()) else {
+    let Some(report) = state.manager.export_report_data(run_id.as_deref()) else {
         return (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "no benchmark report available to export" })),
@@ -552,8 +570,8 @@ async fn post_save_json_dialog(
             .into_response();
     };
 
-    let json_text = match serde_json::to_string_pretty(&report) {
-        Ok(text) => text,
+    let payload = match report.encode(format) {
+        Ok(bytes) => bytes,
         Err(err) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -564,8 +582,9 @@ async fn post_save_json_dialog(
     };
 
     let (tx, rx) = oneshot::channel();
-    if !dispatcher(NativeDialogRequest::SaveJsonFile {
-        default_name: "rusty-loader-report.json".to_string(),
+    if !dispatcher(NativeDialogRequest::SaveReportFile {
+        format,
+        default_name: format.default_filename().to_string(),
         resp: tx,
     }) {
         return (
@@ -577,7 +596,7 @@ async fn post_save_json_dialog(
 
     match rx.await {
         Ok(Some(path)) => {
-            if let Err(err) = fs::write(&path, &json_text) {
+            if let Err(err) = write_export_bytes(&path, &payload) {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(serde_json::json!({
@@ -586,15 +605,17 @@ async fn post_save_json_dialog(
                 )
                     .into_response();
             }
-            Json(SaveJsonDialogResponse {
+            Json(SaveReportDialogResponse {
                 cancelled: false,
                 path: Some(path.to_string_lossy().into_owned()),
+                format,
             })
             .into_response()
         }
-        Ok(None) => Json(SaveJsonDialogResponse {
+        Ok(None) => Json(SaveReportDialogResponse {
             cancelled: true,
             path: None,
+            format,
         })
         .into_response(),
         Err(_) => (
@@ -603,6 +624,25 @@ async fn post_save_json_dialog(
         )
             .into_response(),
     }
+}
+
+async fn post_save_report_dialog(
+    State(state): State<InteractiveState>,
+    payload: Option<Json<SaveReportDialogRequest>>,
+) -> Response {
+    let (format, run_id) = match payload {
+        Some(Json(req)) => (req.format, req.run_id),
+        None => (ExportFormat::Json, None),
+    };
+    save_report_with_dialog(state, format, run_id).await
+}
+
+async fn post_save_json_dialog(
+    State(state): State<InteractiveState>,
+    payload: Option<Json<SaveJsonDialogRequest>>,
+) -> Response {
+    let run_id = payload.and_then(|Json(req)| req.run_id);
+    save_report_with_dialog(state, ExportFormat::Json, run_id).await
 }
 
 struct InteractiveSseState {

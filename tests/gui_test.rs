@@ -139,6 +139,8 @@ async fn test_gui_static_assets_and_meta_header_redaction() {
         timeout: Duration::from_millis(2500),
         ramp_up: Duration::from_secs(5),
         output_json: None,
+        output_csv: None,
+        output_pdf: None,
     });
 
     let hub = Arc::new(TelemetryHub::new(config.duration, config.ramp_up));
@@ -292,6 +294,8 @@ async fn test_gui_sse_streaming_history_hydration_and_json_export() {
         timeout: Duration::from_secs(2),
         ramp_up: Duration::ZERO,
         output_json: None,
+        output_csv: None,
+        output_pdf: None,
     };
 
     let hub = Arc::new(TelemetryHub::with_options(
@@ -381,6 +385,44 @@ async fn test_gui_sse_streaming_history_hydration_and_json_export() {
         Some("[REDACTED]")
     );
 
+    // Verify /api/export/csv returns RFC 4180 CSV with redacted headers
+    let csv_resp = client
+        .get(format!("{base_url}/api/export/csv"))
+        .send()
+        .await
+        .expect("GET /api/export/csv");
+    assert_eq!(csv_resp.status(), StatusCode::OK);
+    assert!(csv_resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .starts_with("text/csv"));
+    let csv_body = csv_resp.text().await.expect("CSV body text");
+    assert!(!csv_body.contains("export-secret"));
+    assert!(csv_body.contains("record_type,timestamp_ms,elapsed_secs"));
+    assert!(csv_body.contains("\nsummary,") || csv_body.contains("\r\nsummary,"));
+
+    // Verify /api/export/pdf returns valid PDF bytes with redacted headers
+    let pdf_resp = client
+        .get(format!("{base_url}/api/export/pdf"))
+        .send()
+        .await
+        .expect("GET /api/export/pdf");
+    assert_eq!(pdf_resp.status(), StatusCode::OK);
+    assert_eq!(
+        pdf_resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok()),
+        Some("application/pdf")
+    );
+    let pdf_bytes = pdf_resp.bytes().await.expect("PDF bytes");
+    assert!(pdf_bytes.starts_with(b"%PDF-1.7"));
+    let pdf_lossy = String::from_utf8_lossy(&pdf_bytes);
+    assert!(pdf_lossy.trim_end().ends_with("%%EOF"));
+    assert!(!pdf_lossy.contains("export-secret"));
+
     server_handle.shutdown().await;
 }
 
@@ -407,6 +449,8 @@ async fn test_gui_stop_endpoint_cancels_benchmark_gracefully() {
         timeout: Duration::from_secs(2),
         ramp_up: Duration::ZERO,
         output_json: None,
+        output_csv: None,
+        output_pdf: None,
     };
 
     let hub = Arc::new(TelemetryHub::with_options(

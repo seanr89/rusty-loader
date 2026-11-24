@@ -94,7 +94,9 @@
     runProgressFill: document.getElementById("run-progress-fill"),
     returnLiveBtn: document.getElementById("return-live-btn"),
     pauseChartsBtn: document.getElementById("pause-charts-btn"),
-    exportJsonBtn: document.getElementById("export-json-btn"),
+    exportMenuTrigger: document.getElementById("export-menu-trigger"),
+    exportMenu: document.getElementById("export-menu"),
+    exportMenuList: document.querySelector("#export-menu [focusgroup]"),
     aboutBtn: document.getElementById("about-btn"),
     aboutDialog: document.getElementById("about-dialog"),
     aboutVersionBadge: document.getElementById("about-version-badge"),
@@ -168,7 +170,10 @@
     cfgBodyFile: document.getElementById("cfg-body-file"),
     chooseBodyFileBtn: document.getElementById("choose-body-file-btn"),
     bodyFileMeta: document.getElementById("body-file-meta"),
+    autoExportDetails: document.getElementById("auto-export-details"),
     cfgOutputJson: document.getElementById("cfg-output-json"),
+    cfgOutputCsv: document.getElementById("cfg-output-csv"),
+    cfgOutputPdf: document.getElementById("cfg-output-pdf"),
     configOsWarning: document.getElementById("config-os-warning"),
     configFormError: document.getElementById("config-form-error"),
     startRunBtn: document.getElementById("start-run-btn"),
@@ -383,12 +388,6 @@
     }
   }
 
-  function updateExportHref(runId) {
-    if (!els.exportJsonBtn) return;
-    const url = runId ? `/api/export/json?run_id=${encodeURIComponent(runId)}` : "/api/export/json";
-    els.exportJsonBtn.setAttribute("href", url);
-  }
-
   function updateMetaDisplay(meta) {
     state.meta = meta;
     els.metaMethod.textContent = meta.method || "GET";
@@ -409,7 +408,6 @@
     }
 
     syncRunButtonsForPhase(meta.phase);
-    updateExportHref(state.viewingRunId || meta.run_id || null);
     renderMetaTable(meta);
 
     if (state.snapshots.length === 0) {
@@ -1515,7 +1513,9 @@
   }
 
   function readFormConfig() {
-    const outPath = els.cfgOutputJson?.value.trim() || null;
+    const outJson = els.cfgOutputJson?.value.trim() || null;
+    const outCsv = els.cfgOutputCsv?.value.trim() || null;
+    const outPdf = els.cfgOutputPdf?.value.trim() || null;
     const bodyFile = els.cfgBodyFile?.value.trim() || null;
     const bodyRaw = els.cfgBodyRaw?.value || "";
     return {
@@ -1535,7 +1535,9 @@
       body_mode: state.bodyMode,
       body: state.bodyMode === "raw" ? bodyRaw : null,
       body_file: state.bodyMode === "file" ? bodyFile : null,
-      output_json: outPath,
+      output_json: outJson,
+      output_csv: outCsv,
+      output_pdf: outPdf,
     };
   }
 
@@ -1547,7 +1549,12 @@
     els.cfgDuration.value = c.duration || "30s";
     els.cfgRampUp.value = c.ramp_up || "0s";
     els.cfgTimeout.value = c.timeout || "5000ms";
-    els.cfgOutputJson.value = c.output_json || "";
+    if (els.cfgOutputJson) els.cfgOutputJson.value = c.output_json || "";
+    if (els.cfgOutputCsv) els.cfgOutputCsv.value = c.output_csv || "";
+    if (els.cfgOutputPdf) els.cfgOutputPdf.value = c.output_pdf || "";
+    if (els.autoExportDetails && (c.output_json || c.output_csv || c.output_pdf)) {
+      els.autoExportDetails.open = true;
+    }
     els.cfgBodyRaw.value = c.body || "";
     els.cfgBodyFile.value = c.body_file || "";
     if (els.bodyFileMeta) els.bodyFileMeta.textContent = "";
@@ -1743,6 +1750,21 @@
       loadBtn.addEventListener("click", () => loadRunConfigIntoForm(run.run_id));
 
       wrap.append(inspectBtn, loadBtn);
+
+      const canExport = run.phase !== "failed";
+      for (const fmt of ["json", "csv", "pdf"]) {
+        const expBtn = document.createElement("button");
+        expBtn.type = "button";
+        expBtn.className = "btn btn-secondary btn-sm";
+        expBtn.textContent = fmt.toUpperCase();
+        expBtn.disabled = !canExport;
+        expBtn.title = canExport
+          ? `Export ${fmt.toUpperCase()} report for this run`
+          : "No benchmark summary available for failed run";
+        expBtn.addEventListener("click", () => triggerReportExport(fmt, run.run_id));
+        wrap.appendChild(expBtn);
+      }
+
       tdActions.appendChild(wrap);
 
       tr.append(thCmp, tdTarget, tdVus, tdRps, tdLat, tdErr, tdActions);
@@ -2577,6 +2599,246 @@
     };
   }
 
+  async function triggerReportExport(format, overrideRunId) {
+    const fmt = format || "json";
+    const runId =
+      overrideRunId !== undefined
+        ? overrideRunId
+        : state.viewingRunId || state.activeRunId || state.meta?.run_id || null;
+
+    if (state.mode === "interactive" && state.system && state.system.native_dialogs) {
+      try {
+        const resp = await apiFetch("/api/dialog/save-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ format: fmt, run_id: runId }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          showBanner(data.error || `Export failed (${resp.status})`, true);
+        } else if (!data.cancelled && data.path) {
+          const msg = `Saved ${fmt.toUpperCase()} report to ${data.path}`;
+          showBanner(msg);
+          if (els.formLiveAnnouncer) els.formLiveAnnouncer.textContent = msg;
+        }
+      } catch (err) {
+        showBanner(`Export failed: ${err.message}`, true);
+      }
+      return;
+    }
+
+    const url = runId
+      ? `/api/export/${fmt}?run_id=${encodeURIComponent(runId)}`
+      : `/api/export/${fmt}`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `rusty-loader-report.${fmt}`;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    if (els.formLiveAnnouncer) {
+      els.formLiveAnnouncer.textContent = `Downloading ${fmt.toUpperCase()} report.`;
+    }
+  }
+
+  function initExportMenu() {
+    const trigger = els.exportMenuTrigger;
+    const menu = els.exportMenu;
+    const group = els.exportMenuList;
+    if (!trigger || !menu || !group) return;
+
+    const supportsPopover = "popover" in HTMLElement.prototype;
+    const supportsCommand = "command" in HTMLButtonElement.prototype;
+    const supportsAnchor =
+      typeof CSS !== "undefined" &&
+      typeof CSS.supports === "function" &&
+      CSS.supports("position-area", "block-end");
+
+    if (supportsPopover && !supportsCommand) {
+      trigger.setAttribute("popovertarget", "export-menu");
+      trigger.setAttribute("popovertargetaction", "toggle");
+    }
+
+    let enterOnOpen = false;
+    let pointerActivated = false;
+
+    const getItems = () =>
+      Array.from(group.querySelectorAll("button")).filter(
+        (b) => !b.disabled && b.getAttribute("aria-disabled") !== "true"
+      );
+
+    const isOpen = () =>
+      supportsPopover
+        ? menu.matches(":popover-open")
+        : menu.classList.contains(":popover-open");
+
+    const positionFallback = () => {
+      if (supportsAnchor) return;
+      const rect = trigger.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const margin = 8;
+      let top = rect.bottom + 6;
+      if (top + menuRect.height > vh - margin && rect.top - menuRect.height - 6 >= margin) {
+        top = rect.top - menuRect.height - 6;
+      }
+      let left = rect.right - menuRect.width;
+      if (left < margin) left = Math.max(margin, rect.left);
+      if (left + menuRect.width > vw - margin) {
+        left = Math.max(margin, vw - menuRect.width - margin);
+      }
+      menu.style.left = `${Math.round(left)}px`;
+      menu.style.top = `${Math.round(top)}px`;
+    };
+
+    const setManualOpen = (open) => {
+      if (supportsPopover) {
+        if (open && !isOpen()) menu.showPopover();
+        else if (!open && isOpen()) menu.hidePopover();
+        return;
+      }
+      menu.classList.toggle(":popover-open", open);
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) {
+        positionFallback();
+        if (enterOnOpen) {
+          enterOnOpen = false;
+          const first = getItems()[0];
+          if (first) first.focus({ preventScroll: true });
+        }
+      } else if (menu.contains(document.activeElement)) {
+        trigger.focus({ preventScroll: true });
+      }
+    };
+
+    if (!("focusGroup" in HTMLElement.prototype)) {
+      group.setAttribute("role", "menu");
+      group.querySelectorAll("button:not([role])").forEach((item) => {
+        item.setAttribute("role", "menuitem");
+      });
+      group.addEventListener(
+        "keydown",
+        (event) => {
+          if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+          const items = getItems();
+          if (items.length === 0) return;
+          const current = items.indexOf(document.activeElement);
+          if (current < 0) return;
+          const next =
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? items.length - 1
+                : (current + (event.key === "ArrowUp" ? -1 : 1) + items.length) %
+                  items.length;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          items[next].focus({ preventScroll: true });
+        },
+        true
+      );
+    }
+
+    trigger.addEventListener("pointerdown", () => {
+      pointerActivated = true;
+      queueMicrotask(() => {
+        pointerActivated = false;
+      });
+    });
+
+    if (!supportsPopover) {
+      trigger.addEventListener("click", () => {
+        enterOnOpen = !pointerActivated;
+        setManualOpen(!isOpen());
+      });
+      document.addEventListener("pointerdown", (event) => {
+        if (isOpen() && !menu.contains(event.target) && !trigger.contains(event.target)) {
+          setManualOpen(false);
+        }
+      });
+    } else if (!supportsCommand) {
+      trigger.addEventListener("click", () => {
+        if (!isOpen() && !pointerActivated) {
+          enterOnOpen = true;
+        }
+      });
+    }
+
+    trigger.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (!isOpen()) {
+          enterOnOpen = true;
+          trigger.click();
+        } else {
+          const first = getItems()[0];
+          if (first) first.focus({ preventScroll: true });
+        }
+      } else if ((event.key === "Enter" || event.key === " ") && !isOpen()) {
+        enterOnOpen = true;
+      }
+    });
+
+    if (supportsPopover) {
+      menu.addEventListener("toggle", (event) => {
+        const open = event.newState === "open";
+        trigger.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) {
+          positionFallback();
+          if (enterOnOpen) {
+            enterOnOpen = false;
+            const first = getItems()[0];
+            if (first) first.focus({ preventScroll: true });
+          } else {
+            trigger.focus({ preventScroll: true });
+          }
+        } else {
+          enterOnOpen = false;
+          if (menu.contains(document.activeElement)) {
+            trigger.focus({ preventScroll: true });
+          }
+        }
+      });
+    }
+
+    menu.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        trigger.focus({ preventScroll: true });
+        setManualOpen(false);
+      } else if (event.key === "Tab") {
+        setManualOpen(false);
+      }
+    });
+
+    group.addEventListener("pointermove", (event) => {
+      const item = event.target.closest("button");
+      if (!item || !group.contains(item) || item.disabled) return;
+      const hit = document.elementFromPoint(event.clientX, event.clientY);
+      if (hit && item.contains(hit)) {
+        item.focus({ preventScroll: true });
+      }
+    });
+
+    group.addEventListener("click", (event) => {
+      const item = event.target.closest("button[data-export-format]");
+      if (!item || item.disabled) return;
+      const format = item.dataset.exportFormat;
+      setManualOpen(false);
+      trigger.focus({ preventScroll: true });
+      triggerReportExport(format);
+    });
+
+    document.addEventListener("focusin", (event) => {
+      if (isOpen() && !menu.contains(event.target) && !trigger.contains(event.target)) {
+        setManualOpen(false);
+      }
+    });
+  }
+
   function initButtons() {
     if (els.pauseChartsBtn) {
       els.pauseChartsBtn.addEventListener("click", () => {
@@ -2594,30 +2856,7 @@
       els.stopRunBtn.addEventListener("click", stopActiveRun);
     }
 
-    if (els.exportJsonBtn) {
-      els.exportJsonBtn.addEventListener("click", async (event) => {
-        if (state.mode !== "interactive" || !state.system || !state.system.native_dialogs) {
-          return;
-        }
-        event.preventDefault();
-        const runId = state.viewingRunId || state.activeRunId || state.meta?.run_id || null;
-        try {
-          const resp = await apiFetch("/api/dialog/save-json", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ run_id: runId }),
-          });
-          const data = await resp.json().catch(() => ({}));
-          if (!resp.ok) {
-            showBanner(data.error || `Export failed (${resp.status})`, true);
-          } else if (!data.cancelled && data.path) {
-            showBanner(`Saved JSON report to ${data.path}`);
-          }
-        } catch (err) {
-          showBanner(`Export failed: ${err.message}`, true);
-        }
-      });
-    }
+    initExportMenu();
   }
 
   function initCharts() {

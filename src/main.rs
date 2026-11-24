@@ -1,4 +1,3 @@
-#[cfg(feature = "gui")]
 use std::sync::Arc;
 #[cfg(feature = "gui")]
 use std::time::Duration;
@@ -11,14 +10,13 @@ use rusty_loader::config::{BenchmarkConfig, BenchmarkConfigInput, BodyMode, GuiC
 use rusty_loader::engine::TestController;
 #[cfg(feature = "gui")]
 use rusty_loader::gui::{open_browser_url, start_gui_server, start_interactive_gui_server, RunManager};
-#[cfg(feature = "gui")]
-use rusty_loader::metrics::TelemetryHub;
+use rusty_loader::metrics::snapshot::{TelemetryHub, TelemetrySnapshot};
 use rusty_loader::os::check_and_warn_os_limits;
 #[cfg(feature = "gui")]
 use rusty_loader::os::raise_nofile_soft_limit;
 #[cfg(feature = "gui")]
 use rusty_loader::presets::PresetStore;
-use rusty_loader::reporter::{report_results, spawn_live_progress_bar};
+use rusty_loader::reporter::{report_results_with_snapshots, spawn_live_progress_bar};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -105,6 +103,8 @@ fn initial_input_from_cli(cli: &Cli) -> Option<BenchmarkConfigInput> {
         body,
         body_file,
         output_json: cli.output_json.clone(),
+        output_csv: cli.output_csv.clone(),
+        output_pdf: cli.output_pdf.clone(),
     })
 }
 
@@ -152,15 +152,29 @@ async fn run_cli_benchmark(cli: Cli) -> Result<()> {
         anyhow::bail!("--gui requested, but this binary was compiled without the 'gui' feature");
     }
 
-    #[cfg(feature = "gui")]
+    let needs_hub = {
+        #[cfg(feature = "gui")]
+        let gui_enabled = gui_config.enabled;
+        #[cfg(not(feature = "gui"))]
+        let gui_enabled = false;
+        gui_enabled || config.output_csv.is_some() || config.output_pdf.is_some()
+    };
+
+    let telemetry_hub =
+        needs_hub.then(|| Arc::new(TelemetryHub::new(config.duration, config.ramp_up)));
+
     let mut controller = TestController::from_config(config.clone())?;
-    #[cfg(not(feature = "gui"))]
-    let controller = TestController::from_config(config.clone())?;
+    if let Some(ref hub) = telemetry_hub {
+        controller = controller.with_telemetry_hub(Arc::clone(hub));
+    }
 
     #[cfg(feature = "gui")]
     let gui_handle = if gui_config.enabled {
-        let hub = Arc::new(TelemetryHub::new(config.duration, config.ramp_up));
-        controller = controller.with_telemetry_hub(Arc::clone(&hub));
+        let hub = Arc::clone(
+            telemetry_hub
+                .as_ref()
+                .expect("telemetry hub initialized when --gui is enabled"),
+        );
 
         let handle = start_gui_server(
             Arc::clone(controller.config()),
@@ -204,7 +218,12 @@ async fn run_cli_benchmark(cli: Cli) -> Result<()> {
     controller.cancel_token().cancel();
     let _ = progress_handle.await;
 
-    report_results(&config, &stats)?;
+    let snapshots: Vec<TelemetrySnapshot> = telemetry_hub
+        .as_ref()
+        .map(|hub| hub.history().into_iter().map(|s| (*s).clone()).collect())
+        .unwrap_or_default();
+
+    report_results_with_snapshots(&config, &stats, &snapshots)?;
 
     #[cfg(feature = "gui")]
     if let Some(handle) = gui_handle {

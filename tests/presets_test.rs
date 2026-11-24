@@ -32,6 +32,8 @@ fn sample_input(url: &str) -> BenchmarkConfigInput {
         body: Some(r#"{"ping":true}"#.to_string()),
         body_file: None,
         output_json: None,
+        output_csv: None,
+        output_pdf: None,
     }
 }
 
@@ -143,6 +145,8 @@ fn test_format_cli_command_redaction_and_file_body() {
     cfg.body = None;
     cfg.body_file = Some(PathBuf::from("fixtures/order payload.json"));
     cfg.output_json = Some(PathBuf::from("artifacts/report.json"));
+    cfg.output_csv = Some(PathBuf::from("artifacts/report.csv"));
+    cfg.output_pdf = Some(PathBuf::from("artifacts/report.pdf"));
 
     let redacted_cmd = format_cli_command(&cfg, true);
     assert!(!redacted_cmd.contains("super-secret-token"));
@@ -152,6 +156,8 @@ fn test_format_cli_command_redaction_and_file_body() {
     assert!(redacted_cmd.contains("--concurrency 120"));
     assert!(redacted_cmd.contains("--body '@fixtures/order payload.json'"));
     assert!(redacted_cmd.contains("--output-json artifacts/report.json"));
+    assert!(redacted_cmd.contains("--output-csv artifacts/report.csv"));
+    assert!(redacted_cmd.contains("--output-pdf artifacts/report.pdf"));
 
     let raw_cmd = format_cli_command(&cfg, false);
     assert!(raw_cmd.contains("super-secret-token"));

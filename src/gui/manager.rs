@@ -16,14 +16,16 @@ use tokio_util::sync::CancellationToken;
 use crate::config::{validate_input, BenchmarkConfig, BenchmarkConfigInput, ValidationReport};
 use crate::engine::{TestController, SHUTDOWN_GRACE_PERIOD};
 use crate::gui::api::{
-    build_partial_stats_from_parts, is_sensitive_header, meta_from_config, redact_headers,
-    sanitize_url, GuiMode, MetaResponse,
+    build_partial_stats_from_parts, is_sensitive_header, meta_from_config, sanitize_url, GuiMode,
+    MetaResponse,
 };
 use crate::metrics::snapshot::{
     current_timestamp_ms, TelemetryHub, TelemetryPhase, TelemetrySnapshot,
 };
 use crate::metrics::stats::{BenchmarkStats, LiveCounters};
-use crate::reporter::{export_json_report, JsonReport};
+use crate::reporter::{
+    export_csv_report, export_json_report, export_pdf_report, ExportReport, JsonReport,
+};
 
 /// Maximum number of completed/failed runs retained in memory for a UI session.
 pub const MAX_RUN_HISTORY: usize = 50;
@@ -222,6 +224,8 @@ impl RunManager {
 
         let task_handle = tokio::spawn(async move {
             let result = controller.run().await;
+            let snapshots: Vec<TelemetrySnapshot> =
+                hub_task.history().into_iter().map(|s| (*s).clone()).collect();
 
             if let Ok(ref stats) = result {
                 if let Some(ref output_path) = config_task.output_json {
@@ -232,10 +236,31 @@ impl RunManager {
                         );
                     }
                 }
+                if config_task.output_csv.is_some() || config_task.output_pdf.is_some() {
+                    let export = ExportReport::from_config_redacted(
+                        &config_task,
+                        stats,
+                        snapshots.clone(),
+                        preset_task.clone(),
+                    );
+                    if let Some(ref csv_path) = config_task.output_csv {
+                        if let Err(err) = export_csv_report(csv_path, &export) {
+                            eprintln!(
+                                "Warning: failed to write CSV report to '{}': {err}",
+                                csv_path.display()
+                            );
+                        }
+                    }
+                    if let Some(ref pdf_path) = config_task.output_pdf {
+                        if let Err(err) = export_pdf_report(pdf_path, &export) {
+                            eprintln!(
+                                "Warning: failed to write PDF report to '{}': {err}",
+                                pdf_path.display()
+                            );
+                        }
+                    }
+                }
             }
-
-            let snapshots: Vec<TelemetrySnapshot> =
-                hub_task.history().into_iter().map(|s| (*s).clone()).collect();
 
             let mut guard = inner_ref
                 .write()
@@ -402,8 +427,8 @@ impl RunManager {
             .unwrap_or_default()
     }
 
-    /// Builds a redacted [`JsonReport`] for the requested `run_id`, active run, or latest completed run.
-    pub fn export_report(&self, run_id: Option<&str>) -> Option<JsonReport> {
+    /// Builds a redacted [`ExportReport`] for `run_id`, active run, or latest completed run.
+    pub fn export_report_data(&self, run_id: Option<&str>) -> Option<ExportReport> {
         let guard = self
             .inner
             .read()
@@ -412,21 +437,30 @@ impl RunManager {
         if let Some(target_id) = run_id {
             if let Some(ref active) = guard.active {
                 if active.run_id == target_id {
-                    return Some(report_for_active(active));
+                    return Some(export_for_active(active));
                 }
             }
             return guard
                 .history
                 .iter()
                 .find(|r| r.run_id == target_id)
-                .and_then(report_for_record);
+                .and_then(ExportReport::from_completed_record);
         }
 
         if let Some(ref active) = guard.active {
-            return Some(report_for_active(active));
+            return Some(export_for_active(active));
         }
 
-        guard.history.front().and_then(report_for_record)
+        guard
+            .history
+            .front()
+            .and_then(ExportReport::from_completed_record)
+    }
+
+    /// Builds a redacted [`JsonReport`] for the requested `run_id`, active run, or latest completed run.
+    pub fn export_report(&self, run_id: Option<&str>) -> Option<JsonReport> {
+        self.export_report_data(run_id)
+            .map(|report| report.to_json_report())
     }
 
     /// Returns summaries of all recorded runs in reverse chronological order (newest first).
@@ -522,28 +556,23 @@ fn push_history(history: &mut VecDeque<CompletedRunRecord>, record: CompletedRun
     history.push_front(record);
 }
 
-fn report_for_active(active: &ActiveRunState) -> JsonReport {
+fn export_for_active(active: &ActiveRunState) -> ExportReport {
     let stats = match active.hub.final_stats() {
         Some(final_stats) => (*final_stats).clone(),
         None => build_partial_stats_from_parts(&active.hub, &active.counters, active.started_at),
     };
-    let mut report = JsonReport::new(&active.config, &stats);
-    report.url = sanitize_url(&active.config.url);
-    report.headers = redact_headers(&active.config.headers);
-    report
-}
-
-fn report_for_record(record: &CompletedRunRecord) -> Option<JsonReport> {
-    let stats = record.stats.as_ref()?.clone();
-    Some(JsonReport {
-        timestamp: record.timestamp.clone(),
-        url: record.meta.url.clone(),
-        method: record.meta.method.clone(),
-        concurrency: record.meta.concurrency,
-        configured_duration_secs: record.meta.duration_secs,
-        headers: record.meta.headers.clone(),
-        stats,
-    })
+    let snapshots = active
+        .hub
+        .history()
+        .into_iter()
+        .map(|s| (*s).clone())
+        .collect();
+    ExportReport::from_config_redacted(
+        &active.config,
+        &stats,
+        snapshots,
+        active.preset_name.clone(),
+    )
 }
 
 fn summarize_record(record: &CompletedRunRecord) -> CompletedRunSummary {

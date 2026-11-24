@@ -12,23 +12,19 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::stream::{self, Stream};
-use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 
 use crate::changelog::{about_payload, changelog_payload, AboutPayload, ChangelogPayload};
-pub use crate::config::{is_sensitive_header, sanitize_url};
+pub use crate::config::{is_sensitive_header, redact_headers, sanitize_url};
 use crate::config::BenchmarkConfig;
 use crate::metrics::snapshot::{TelemetryHub, TelemetryPhase, TelemetrySnapshot};
 use crate::metrics::stats::{BenchmarkStats, LatencyDistribution, LiveCounters};
-use crate::reporter::JsonReport;
 
 const INDEX_HTML: &str = include_str!("assets/index.html");
 const STYLES_CSS: &str = include_str!("assets/styles.css");
 const APP_JS: &str = include_str!("assets/app.js");
-
-const REDACTED_VALUE: &str = "[REDACTED]";
 
 /// Shared Axum application state for all GUI endpoints.
 #[derive(Clone)]
@@ -85,25 +81,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/stream", get(stream_telemetry))
         .route("/api/stop", post(post_stop))
         .route("/api/export/json", get(export_json))
+        .route("/api/export/csv", get(export_csv))
+        .route("/api/export/pdf", get(export_pdf))
         .with_state(state)
-}
-
-/// Clones `headers` into a map while replacing sensitive header values with `"[REDACTED]"`.
-pub fn redact_headers(headers: &HeaderMap) -> HashMap<String, String> {
-    let mut sanitized = HashMap::new();
-    for (name, value) in headers {
-        let key = name.as_str().to_string();
-        let val = if is_sensitive_header(name.as_str()) {
-            REDACTED_VALUE.to_string()
-        } else {
-            value
-                .to_str()
-                .map(str::to_string)
-                .unwrap_or_else(|_| "[BINARY]".to_string())
-        };
-        sanitized.insert(key, val);
-    }
-    sanitized
 }
 
 pub(crate) async fn serve_index() -> impl IntoResponse {
@@ -206,26 +186,20 @@ async fn post_stop(State(state): State<AppState>) -> Json<serde_json::Value> {
     }))
 }
 
-async fn export_json(State(state): State<AppState>) -> Response {
-    let stats = match state.hub.final_stats() {
-        Some(final_stats) => (*final_stats).clone(),
-        None => build_partial_stats(&state),
-    };
-
-    let mut report = JsonReport::new(&state.config, &stats);
-    report.url = sanitize_url(&state.config.url);
-    report.headers = redact_headers(&state.config.headers);
-
-    match serde_json::to_string_pretty(&report) {
+pub(crate) fn render_export_download(
+    report: &crate::reporter::ExportReport,
+    format: crate::reporter::ExportFormat,
+) -> Response {
+    match report.encode(format) {
         Ok(payload) => {
             let mut response = (StatusCode::OK, payload).into_response();
             response.headers_mut().insert(
                 header::CONTENT_TYPE,
-                HeaderValue::from_static("application/json; charset=utf-8"),
+                HeaderValue::from_static(format.content_type()),
             );
             response.headers_mut().insert(
                 header::CONTENT_DISPOSITION,
-                HeaderValue::from_static("attachment; filename=\"rusty-loader-report.json\""),
+                HeaderValue::from_static(format.content_disposition()),
             );
             response.headers_mut().insert(
                 header::CACHE_CONTROL,
@@ -239,6 +213,35 @@ async fn export_json(State(state): State<AppState>) -> Response {
         )
             .into_response(),
     }
+}
+
+fn export_report_from_state(state: &AppState) -> crate::reporter::ExportReport {
+    let stats = match state.hub.final_stats() {
+        Some(final_stats) => (*final_stats).clone(),
+        None => build_partial_stats(state),
+    };
+    let snapshots = state
+        .hub
+        .history()
+        .into_iter()
+        .map(|s| (*s).clone())
+        .collect();
+    crate::reporter::ExportReport::from_config_redacted(&state.config, &stats, snapshots, None)
+}
+
+async fn export_json(State(state): State<AppState>) -> Response {
+    let report = export_report_from_state(&state);
+    render_export_download(&report, crate::reporter::ExportFormat::Json)
+}
+
+async fn export_csv(State(state): State<AppState>) -> Response {
+    let report = export_report_from_state(&state);
+    render_export_download(&report, crate::reporter::ExportFormat::Csv)
+}
+
+async fn export_pdf(State(state): State<AppState>) -> Response {
+    let report = export_report_from_state(&state);
+    render_export_download(&report, crate::reporter::ExportFormat::Pdf)
 }
 
 fn build_partial_stats(state: &AppState) -> BenchmarkStats {

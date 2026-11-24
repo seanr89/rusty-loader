@@ -130,6 +130,10 @@ pub struct BenchmarkConfigInput {
     pub body_file: Option<PathBuf>,
     #[serde(default)]
     pub output_json: Option<PathBuf>,
+    #[serde(default)]
+    pub output_csv: Option<PathBuf>,
+    #[serde(default)]
+    pub output_pdf: Option<PathBuf>,
 }
 
 impl Default for BenchmarkConfigInput {
@@ -146,6 +150,8 @@ impl Default for BenchmarkConfigInput {
             body: None,
             body_file: None,
             output_json: None,
+            output_csv: None,
+            output_pdf: None,
         }
     }
 }
@@ -363,6 +369,26 @@ pub fn sanitize_url(url: &Url) -> String {
     sanitized.to_string()
 }
 
+const REDACTED_VALUE: &str = "[REDACTED]";
+
+/// Clones `headers` into a map while replacing sensitive header values with `"[REDACTED]"`.
+pub fn redact_headers(headers: &HeaderMap) -> HashMap<String, String> {
+    let mut sanitized = HashMap::new();
+    for (name, value) in headers {
+        let key = name.as_str().to_string();
+        let val = if is_sensitive_header(name.as_str()) {
+            REDACTED_VALUE.to_string()
+        } else {
+            value
+                .to_str()
+                .map(str::to_string)
+                .unwrap_or_else(|_| "[BINARY]".to_string())
+        };
+        sanitized.insert(key, val);
+    }
+    sanitized
+}
+
 fn read_body_file(raw_path: &str) -> Result<String, ConfigError> {
     let trimmed_path = raw_path.trim();
     if trimmed_path.is_empty() {
@@ -433,9 +459,12 @@ pub struct BenchmarkConfig {
     pub timeout: Duration,
     pub ramp_up: Duration,
     pub output_json: Option<PathBuf>,
+    pub output_csv: Option<PathBuf>,
+    pub output_pdf: Option<PathBuf>,
 }
 
 impl BenchmarkConfig {
+    #[allow(clippy::too_many_arguments)]
     fn build_from_parts(
         raw_url: &str,
         concurrency: usize,
@@ -446,6 +475,8 @@ impl BenchmarkConfig {
         headers: HeaderMap,
         body: Option<String>,
         output_json: Option<PathBuf>,
+        output_csv: Option<PathBuf>,
+        output_pdf: Option<PathBuf>,
     ) -> Result<Self, ConfigError> {
         let parsed_url = validate_target_url(raw_url)?;
 
@@ -475,6 +506,8 @@ impl BenchmarkConfig {
             timeout,
             ramp_up,
             output_json,
+            output_csv,
+            output_pdf,
         })
     }
 
@@ -510,6 +543,8 @@ impl BenchmarkConfig {
             headers,
             body,
             cli.output_json,
+            cli.output_csv,
+            cli.output_pdf,
         )
     }
 
@@ -553,6 +588,8 @@ impl BenchmarkConfig {
             headers,
             body,
             input.output_json,
+            input.output_csv,
+            input.output_pdf,
         )
     }
 
@@ -606,6 +643,8 @@ mod tests {
             body: None,
             body_file: None,
             output_json: None,
+            output_csv: None,
+            output_pdf: None,
         };
 
         let limits = OsLimits {
@@ -651,6 +690,8 @@ mod tests {
             body: None,
             body_file: Some(tmp.path().to_path_buf()),
             output_json: None,
+            output_csv: None,
+            output_pdf: None,
         };
 
         let cfg = BenchmarkConfig::from_input(input).expect("valid input");

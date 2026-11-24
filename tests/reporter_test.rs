@@ -37,6 +37,8 @@ fn build_sample_config() -> BenchmarkConfig {
         timeout: Duration::from_secs(5),
         ramp_up: Duration::from_secs(5),
         output_json: None,
+        output_csv: None,
+        output_pdf: None,
     }
 }
 

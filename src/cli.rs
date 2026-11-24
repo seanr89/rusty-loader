@@ -87,6 +87,14 @@ pub struct Cli {
     #[arg(long = "output-json")]
     pub output_json: Option<PathBuf>,
 
+    /// Optional file path to write time-series and summary CSV benchmark telemetry
+    #[arg(long = "output-csv")]
+    pub output_csv: Option<PathBuf>,
+
+    /// Optional file path to write an offline PDF summary and chart report
+    #[arg(long = "output-pdf")]
+    pub output_pdf: Option<PathBuf>,
+
     /// Enable the embedded real-time web monitoring dashboard during the run
     #[arg(long = "gui", default_value_t = false)]
     pub gui: bool,

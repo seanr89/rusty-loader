@@ -344,11 +344,17 @@ pub fn format_cli_command(input: &BenchmarkConfigInput, redact_secrets: bool) ->
         }
     }
 
-    if let Some(ref out_path) = input.output_json {
-        let p = out_path.to_string_lossy();
-        let trimmed = p.trim();
-        if !trimmed.is_empty() {
-            parts.push(format!("--output-json {}", shell_quote(trimmed)));
+    for (flag, path_opt) in [
+        ("--output-json", &input.output_json),
+        ("--output-csv", &input.output_csv),
+        ("--output-pdf", &input.output_pdf),
+    ] {
+        if let Some(out_path) = path_opt {
+            let p = out_path.to_string_lossy();
+            let trimmed = p.trim();
+            if !trimmed.is_empty() {
+                parts.push(format!("{flag} {}", shell_quote(trimmed)));
+            }
         }
     }
 

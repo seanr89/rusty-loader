@@ -55,6 +55,8 @@ fn build_config(
         timeout,
         ramp_up: Duration::ZERO,
         output_json: None,
+        output_csv: None,
+        output_pdf: None,
     }
 }
 

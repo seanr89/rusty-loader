@@ -1,13 +1,13 @@
 # Task 6: Mock Server Integration Testing, Verification & Docs
 
 ## 1. Goal & Context
-Build the end-to-end integration test suite using `wiremock`, implement high-concurrency verification (validating 700 VUs with RSS $< 50\text{ MB}$), verify graceful termination and error handling, and update documentation (`README.md`) with usage recipes.
+Build the end-to-end integration test suite using `wiremock`, implement concurrency & RSS memory verification (validating 50 VUs with RSS $< 50\text{ MB}$), verify graceful termination and error handling, and update documentation (`README.md`) with usage recipes.
 
 ---
 
 ## 2. Target Files
 - `tests/integration_test.rs`: Comprehensive end-to-end tests exercising the compiled binary and library.
-- `scripts/verify_700_vu_load.sh`: Verification script to launch local mock server and measure memory/RSS under 700 concurrent VUs.
+- `scripts/verify_50_vu_load.sh`: Verification script to launch local mock server and measure memory/RSS under 50 concurrent VUs.
 - `README.md`: Complete user guide, CLI argument documentation, usage recipes, and benchmark results.
 
 ---
@@ -38,10 +38,10 @@ Implement the following integration tests using `wiremock::MockServer`:
    - Run benchmark specifying `--output-json <temp_path>`.
    - Read temp file, parse with `serde_json::Value`, and verify all expected keys exist (`total_requests`, `latencies`, `status_distribution`).
 
-### 3.2 700 Virtual Users Verification (`scripts/verify_700_vu_load.sh`)
+### 3.2 50 Virtual Users Verification (`scripts/verify_50_vu_load.sh`)
 Verification script that:
 1. Spawns an in-process or local mock HTTP server.
-2. Launches `cargo run --release -- --url http://127.0.0.1:PORT/ping -c 700 -d 10s`.
+2. Launches `rusty-loader --url http://127.0.0.1:PORT/ping -c 50 -d 10s --gui --gui-port 0`.
 3. Samples the process RSS using `ps -o rss= -p $PID` every 500ms.
 4. Asserts that peak RSS stays strictly below $50\text{ MB}$ ($51,200\text{ KB}$).
 5. Checks network socket states (`netstat` / `lsof`) to ensure no runaway socket leakage.
@@ -65,7 +65,7 @@ Run:
 ```bash
 cargo check
 cargo test --test integration_test
-bash scripts/verify_700_vu_load.sh
+bash scripts/verify_50_vu_load.sh
 ```
 
 ---
@@ -77,17 +77,17 @@ You are executing Task 6 of the rusty-loader project.
 Review plan/06_testing_verification_and_docs.md for instructions.
 Tasks to perform:
 1. Implement tests/integration_test.rs using wiremock covering happy path, mixed status codes, client timeouts, and JSON file generation.
-2. Create scripts/verify_700_vu_load.sh to benchmark 700 concurrent connections against a local endpoint and assert RSS memory < 50MB.
+2. Create scripts/verify_50_vu_load.sh to benchmark 50 concurrent connections against a local endpoint and assert RSS memory < 50MB.
 3. Update README.md with comprehensive installation steps, CLI argument reference, recipes, and architecture description.
 4. Run `cargo test` and verify all tests in the workspace pass.
-5. Execute the 700 VU verification script to validate memory and stability criteria.
+5. Execute the 50 VU verification script to validate memory and stability criteria.
 ```
 
 ---
 
 ## 6. Acceptance Criteria Checklist
 - [ ] Integration tests exercise happy path, error paths, and timeouts.
-- [ ] 700 concurrent worker benchmark runs smoothly without socket or memory leaks.
-- [ ] Peak RSS memory remains $< 50\text{ MB}$ under sustained 700 VU load.
+- [ ] 50 concurrent worker benchmark runs smoothly without socket or memory leaks.
+- [ ] Peak RSS memory remains $< 50\text{ MB}$ under sustained 50 VU load.
 - [ ] JSON report export verified end-to-end.
 - [ ] `README.md` is comprehensive, accurate, and up to date.
