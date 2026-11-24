@@ -3,6 +3,16 @@
 (() => {
   const STORAGE_KEY = "color-scheme";
   const colorSchemeMql = window.matchMedia("(prefers-color-scheme: dark)");
+  const EXAMPLE_URL_PLACEHOLDER = ["https:", "//api.example.com/v1/ping"].join("");
+  const SENSITIVE_HEADER_NAMES = new Set([
+    "authorization",
+    "proxy-authorization",
+    "cookie",
+    "set-cookie",
+    "x-api-key",
+    "api-key",
+    "x-auth-token",
+  ]);
 
   const HTTP_REASONS = {
     100: "Continue",
@@ -33,18 +43,34 @@
   };
 
   const state = {
+    mode: "cli",
+    system: null,
     meta: null,
     about: null,
     changelog: null,
     changelogExpanded: false,
     snapshots: [],
+    liveSnapshots: [],
     renderedSnapshots: [],
     finalStats: null,
+    liveFinalStats: null,
+    liveMeta: null,
+    activeRunId: null,
+    viewingRunId: null,
     paused: false,
     completed: false,
     stopRequested: false,
     hadDisconnect: false,
     eventSource: null,
+    presets: [],
+    recent: [],
+    selectedPresetId: null,
+    presetSaveMode: "create",
+    formDirty: false,
+    bodyMode: "none",
+    headers: [],
+    runs: [],
+    compareIds: [],
     hoverIndex: {
       throughput: null,
       latency: null,
@@ -54,6 +80,10 @@
 
   const els = {
     metaColorScheme: document.querySelector('meta[name="color-scheme"]'),
+    formLiveAnnouncer: document.getElementById("form-live-announcer"),
+    toggleSidebarBtn: document.getElementById("toggle-sidebar-btn"),
+    workspaceLayout: document.getElementById("workspace-layout"),
+    configSidebar: document.getElementById("config-sidebar"),
     appVersionPill: document.getElementById("app-version-pill"),
     phaseBadge: document.getElementById("phase-badge"),
     metaMethod: document.getElementById("meta-method"),
@@ -62,7 +92,9 @@
     timerDuration: document.getElementById("timer-duration"),
     runProgress: document.getElementById("run-progress"),
     runProgressFill: document.getElementById("run-progress-fill"),
+    returnLiveBtn: document.getElementById("return-live-btn"),
     pauseChartsBtn: document.getElementById("pause-charts-btn"),
+    exportJsonBtn: document.getElementById("export-json-btn"),
     aboutBtn: document.getElementById("about-btn"),
     aboutDialog: document.getElementById("about-dialog"),
     aboutVersionBadge: document.getElementById("about-version-badge"),
@@ -101,7 +133,84 @@
     tooltipThroughput: document.getElementById("tooltip-throughput"),
     tooltipLatency: document.getElementById("tooltip-latency"),
     tooltipErrors: document.getElementById("tooltip-errors"),
+    presetDirtyPill: document.getElementById("preset-dirty-pill"),
+    presetSelect: document.getElementById("preset-select"),
+    presetNewBtn: document.getElementById("preset-new-btn"),
+    presetSaveBtn: document.getElementById("preset-save-btn"),
+    presetSaveAsBtn: document.getElementById("preset-save-as-btn"),
+    presetDeleteBtn: document.getElementById("preset-delete-btn"),
+    presetDeleteConfirm: document.getElementById("preset-delete-confirm"),
+    presetDeleteConfirmBtn: document.getElementById("preset-delete-confirm-btn"),
+    presetDeleteCancelBtn: document.getElementById("preset-delete-cancel-btn"),
+    presetSavePanel: document.getElementById("preset-save-panel"),
+    presetNameInput: document.getElementById("preset-name-input"),
+    presetDescInput: document.getElementById("preset-desc-input"),
+    presetCommitBtn: document.getElementById("preset-commit-btn"),
+    presetCancelBtn: document.getElementById("preset-cancel-btn"),
+    configForm: document.getElementById("config-form"),
+    cfgMethod: document.getElementById("cfg-method"),
+    cfgUrl: document.getElementById("cfg-url"),
+    cfgConcurrency: document.getElementById("cfg-concurrency"),
+    cfgDuration: document.getElementById("cfg-duration"),
+    cfgRampUp: document.getElementById("cfg-ramp-up"),
+    cfgTimeout: document.getElementById("cfg-timeout"),
+    addHeaderBtn: document.getElementById("add-header-btn"),
+    headersList: document.getElementById("headers-list"),
+    bodyTabs: Array.from(document.querySelectorAll('[role="tab"][data-body-mode]')),
+    bodyPanels: {
+      none: document.getElementById("body-panel-none"),
+      raw: document.getElementById("body-panel-raw"),
+      file: document.getElementById("body-panel-file"),
+    },
+    bodyRawBytes: document.getElementById("body-raw-bytes"),
+    formatJsonBtn: document.getElementById("format-json-btn"),
+    cfgBodyRaw: document.getElementById("cfg-body-raw"),
+    cfgBodyFile: document.getElementById("cfg-body-file"),
+    chooseBodyFileBtn: document.getElementById("choose-body-file-btn"),
+    bodyFileMeta: document.getElementById("body-file-meta"),
+    cfgOutputJson: document.getElementById("cfg-output-json"),
+    configOsWarning: document.getElementById("config-os-warning"),
+    configFormError: document.getElementById("config-form-error"),
+    startRunBtn: document.getElementById("start-run-btn"),
+    copyCliBtn: document.getElementById("copy-cli-btn"),
+    cliPreviewBox: document.getElementById("cli-preview-box"),
+    runHistoryPanel: document.getElementById("run-history-panel"),
+    runHistoryCount: document.getElementById("run-history-count"),
+    runComparePanel: document.getElementById("run-compare-panel"),
+    runHistoryBody: document.getElementById("run-history-body"),
   };
+
+  function sessionToken() {
+    return typeof window.__RL_SESSION_TOKEN__ === "string" && window.__RL_SESSION_TOKEN__.length > 0
+      ? window.__RL_SESSION_TOKEN__
+      : null;
+  }
+
+  async function apiFetch(url, options = {}) {
+    const headers = new Headers(options.headers || {});
+    const token = sessionToken();
+    if (token) {
+      headers.set("X-RL-Session", token);
+    }
+    return fetch(url, {
+      cache: "no-store",
+      credentials: "same-origin",
+      ...options,
+      headers,
+    });
+  }
+
+  function isSensitiveHeaderName(name) {
+    const lower = String(name || "").trim().toLowerCase();
+    return (
+      SENSITIVE_HEADER_NAMES.has(lower) ||
+      lower.includes("token") ||
+      lower.includes("secret") ||
+      lower.includes("password") ||
+      lower.includes("credential") ||
+      lower.includes("key")
+    );
+  }
 
   function readStoredScheme() {
     try {
@@ -154,7 +263,6 @@
     }
 
     colorSchemeMql.addEventListener("change", () => {
-      // Never delete localStorage on system preference changes; just re-render canvas colors.
       drawAllCharts();
     });
 
@@ -200,15 +308,17 @@
     return `${Number(secs || 0).toFixed(1)}s`;
   }
 
-  function showBanner(message) {
+  function showBanner(message, isError = false) {
     if (!els.connectionBanner) return;
     els.connectionBanner.textContent = message;
+    els.connectionBanner.classList.toggle("notice-error", isError);
     els.connectionBanner.hidden = false;
   }
 
   function hideBanner() {
     if (!els.connectionBanner) return;
     els.connectionBanner.hidden = true;
+    els.connectionBanner.classList.remove("notice-error");
     els.connectionBanner.textContent = "";
   }
 
@@ -216,6 +326,10 @@
     if (!els.phaseBadge) return;
     els.phaseBadge.className = "badge";
     switch (phase) {
+      case "idle":
+        els.phaseBadge.textContent = "Idle";
+        els.phaseBadge.classList.add("badge-idle");
+        break;
       case "ramping_up":
         els.phaseBadge.textContent = "Ramping Up";
         els.phaseBadge.classList.add("badge-ramping");
@@ -228,6 +342,10 @@
         els.phaseBadge.textContent = "Completed";
         els.phaseBadge.classList.add("badge-completed");
         break;
+      case "failed":
+        els.phaseBadge.textContent = "Failed";
+        els.phaseBadge.classList.add("badge-failed");
+        break;
       case "error":
         els.phaseBadge.textContent = "Disconnected";
         els.phaseBadge.classList.add("badge-error");
@@ -239,10 +357,42 @@
     }
   }
 
+  function isActivePhase(phase) {
+    return phase === "ramping_up" || phase === "running" || phase === "draining";
+  }
+
+  function syncRunButtonsForPhase(phase) {
+    if (state.mode !== "interactive") return;
+    const running = isActivePhase(phase);
+    if (els.startRunBtn) {
+      els.startRunBtn.disabled = running;
+      els.startRunBtn.textContent = running ? "Benchmark Running..." : "Start Load Test";
+    }
+    if (els.stopRunBtn) {
+      els.stopRunBtn.disabled = !running || phase === "draining";
+      els.stopRunBtn.textContent =
+        phase === "draining"
+          ? "Stopping..."
+          : running
+            ? "Stop Run"
+            : phase === "completed"
+              ? "Completed"
+              : phase === "failed"
+                ? "Failed"
+                : "Stop Run";
+    }
+  }
+
+  function updateExportHref(runId) {
+    if (!els.exportJsonBtn) return;
+    const url = runId ? `/api/export/json?run_id=${encodeURIComponent(runId)}` : "/api/export/json";
+    els.exportJsonBtn.setAttribute("href", url);
+  }
+
   function updateMetaDisplay(meta) {
     state.meta = meta;
     els.metaMethod.textContent = meta.method || "GET";
-    els.metaUrl.textContent = meta.url || "--";
+    els.metaUrl.textContent = meta.url || (meta.phase === "idle" ? "Configure a target to run" : "--");
     els.metaUrl.title = meta.url || "";
     els.timerDuration.textContent = formatSeconds(meta.duration_secs);
     els.kpiRampUp.textContent = `Ramp-up: ${Number(meta.ramp_up_secs || 0).toFixed(1)}s`;
@@ -254,10 +404,12 @@
       els.metaBodyInfo.textContent = "No request body";
     }
 
-    if (!state.completed) {
+    if (!state.completed || state.mode === "interactive") {
       setPhaseBadge(meta.phase);
     }
 
+    syncRunButtonsForPhase(meta.phase);
+    updateExportHref(state.viewingRunId || meta.run_id || null);
     renderMetaTable(meta);
 
     if (state.snapshots.length === 0) {
@@ -270,13 +422,16 @@
     tbody.replaceChildren();
 
     const rows = [
-      ["Target URL", meta.url],
-      ["HTTP Method", meta.method],
+      ["Target URL", meta.url || "--"],
+      ["HTTP Method", meta.method || "GET"],
       ["Target Concurrency", `${meta.concurrency} VUs`],
       ["Configured Duration", `${Number(meta.duration_secs).toFixed(2)} s`],
       ["Ramp-Up Duration", `${Number(meta.ramp_up_secs).toFixed(2)} s`],
       ["Request Timeout", `${meta.timeout_ms} ms`],
     ];
+    if (meta.preset_name) {
+      rows.unshift(["Preset", meta.preset_name]);
+    }
 
     const headerEntries = Object.entries(meta.headers || {}).sort(([a], [b]) => a.localeCompare(b));
     for (const [key, val] of headerEntries) {
@@ -294,6 +449,33 @@
       tr.append(th, td);
       tbody.appendChild(tr);
     }
+  }
+
+  function resetTelemetryDisplay() {
+    state.snapshots = [];
+    state.renderedSnapshots = [];
+    state.finalStats = null;
+    state.completed = false;
+    state.stopRequested = false;
+
+    els.kpiWindowRps.textContent = "0.0 req/s";
+    els.kpiAvgRps.textContent = "Avg: 0.0 req/s";
+    els.kpiActiveVus.textContent = `0 / ${state.meta ? state.meta.concurrency : 0}`;
+    els.kpiTotalReqs.textContent = "0";
+    els.kpiTotalBytes.textContent = "Transferred: 0 B";
+    els.kpiSuccessRate.textContent = "100.00%";
+    els.kpiErrorRate.textContent = "Errors: 0 (0.00%)";
+    els.kpiLatencySummary.textContent = "0.00 / 0.00 / 0.00 ms";
+    els.kpiLatencyMax.textContent = "Window Max: 0.00 ms";
+    els.kpiTransferRate.textContent = "0.00 B/s";
+    els.timerElapsed.textContent = "0.0s";
+    els.runProgress.setAttribute("aria-valuenow", "0");
+    els.runProgressFill.style.inlineSize = "0%";
+    els.finalSummaryPanel.hidden = true;
+    els.finalSummaryGrid.replaceChildren();
+    renderStatusTable({}, 0);
+    renderErrorTable({}, 0);
+    drawAllCharts();
   }
 
   function updateKpisFromSnapshot(snap) {
@@ -329,6 +511,7 @@
 
     if (!state.completed) {
       setPhaseBadge(snap.phase);
+      syncRunButtonsForPhase(snap.phase);
     }
 
     renderStatusTable(snap.status_distribution, snap.total_requests);
@@ -421,9 +604,13 @@
     state.completed = true;
     state.finalStats = stats;
     setPhaseBadge("completed");
-    hideBanner();
+    syncRunButtonsForPhase("completed");
 
-    if (els.stopRunBtn) {
+    if (!state.viewingRunId) {
+      hideBanner();
+    }
+
+    if (state.mode === "cli" && els.stopRunBtn) {
       els.stopRunBtn.disabled = true;
       els.stopRunBtn.textContent = "Completed";
     }
@@ -496,6 +683,9 @@
     state.snapshots = Array.from(byElapsed.values()).sort(
       (a, b) => a.elapsed_secs - b.elapsed_secs
     );
+    if (!state.viewingRunId) {
+      state.liveSnapshots = state.snapshots.slice();
+    }
     if (!state.paused) {
       state.renderedSnapshots = state.snapshots.slice();
     }
@@ -509,6 +699,14 @@
   }
 
   function appendSnapshot(snap) {
+    state.liveSnapshots.push(snap);
+    if (state.liveSnapshots.length > 3600) {
+      state.liveSnapshots.shift();
+    }
+    if (state.viewingRunId) {
+      return;
+    }
+
     state.snapshots.push(snap);
     if (state.snapshots.length > 3600) {
       state.snapshots.shift();
@@ -576,7 +774,13 @@
       ctx.fillStyle = textMuted;
       ctx.font = "12px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Waiting for telemetry snapshots...", width / 2, height / 2);
+      ctx.fillText(
+        state.mode === "interactive" && state.meta && state.meta.phase === "idle"
+          ? "Configure a target and start a benchmark run"
+          : "Waiting for telemetry snapshots...",
+        width / 2,
+        height / 2
+      );
       return;
     }
 
@@ -877,17 +1081,1198 @@
     });
   }
 
+  // Accessible validation & live announcement synchronized with :user-invalid
+  const FormValidationController = (() => {
+    const dirtyState = new WeakMap();
+    const flagged = new WeakSet();
+    const announced = new WeakSet();
+    const supportsUserInvalid = typeof CSS !== "undefined" && CSS.supports("selector(:user-invalid)");
+    let announceTimer = null;
+    let announcedField = null;
+
+    function linkError(el, shown) {
+      const errorId = el.dataset.error;
+      if (!errorId) return;
+      const ids = (el.getAttribute("aria-describedby") || "")
+        .split(/\s+/)
+        .filter((id) => id && id !== errorId);
+      if (shown) ids.push(errorId);
+      if (ids.length) el.setAttribute("aria-describedby", ids.join(" "));
+      else el.removeAttribute("aria-describedby");
+    }
+
+    function spokenText(node) {
+      const copy = node.cloneNode(true);
+      copy.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+      copy
+        .querySelectorAll('[role="img"][aria-label]')
+        .forEach((n) => n.replaceWith(`${n.getAttribute("aria-label")}: `));
+      return copy.textContent.replace(/\s+/g, " ").trim();
+    }
+
+    function announceError(el) {
+      if (!els.formLiveAnnouncer) return;
+      const errorEl = document.getElementById(el.dataset.error);
+      if (!errorEl) return;
+      const labelEl = el.labels && el.labels[0];
+      const label = labelEl ? `${spokenText(labelEl)}: ` : "";
+      clearTimeout(announceTimer);
+      els.formLiveAnnouncer.textContent = "";
+      announcedField = el;
+      announceTimer = setTimeout(() => {
+        els.formLiveAnnouncer.textContent = label + spokenText(errorEl);
+      }, 500);
+    }
+
+    function isElInvalid(el) {
+      if (supportsUserInvalid) {
+        return el.matches(":user-invalid");
+      }
+      return el.classList.contains("user-invalid-fallback");
+    }
+
+    function syncAria(el, announce = false) {
+      if (!el.matches || !el.matches("input, select, textarea")) return;
+      const invalid = isElInvalid(el);
+      if (invalid) {
+        if (announce && !announced.has(el)) {
+          announceError(el);
+          announced.add(el);
+        }
+        el.setAttribute("aria-invalid", "true");
+        linkError(el, true);
+        flagged.add(el);
+      } else if (flagged.has(el) || el.getAttribute("aria-invalid") !== "true") {
+        el.setAttribute("aria-invalid", "false");
+        linkError(el, false);
+        flagged.delete(el);
+        announced.delete(el);
+        if (announcedField === el) {
+          clearTimeout(announceTimer);
+          if (els.formLiveAnnouncer) els.formLiveAnnouncer.textContent = "";
+        }
+      }
+    }
+
+    function updateFallbackState(input) {
+      if (supportsUserInvalid || !input.validity) return;
+      const isValid = input.validity.valid;
+      input.classList.toggle("user-invalid-fallback", !isValid);
+      input.classList.toggle("user-valid-fallback", isValid);
+    }
+
+    function setFieldError(el, message) {
+      if (!el) return;
+      const errId = el.dataset.error;
+      const errEl = errId ? document.getElementById(errId) : null;
+      if (message) {
+        el.setCustomValidity(message);
+        if (errEl) {
+          errEl.replaceChildren();
+          const icon = document.createElement("span");
+          icon.setAttribute("role", "img");
+          icon.setAttribute("aria-label", "Error");
+          icon.textContent = "! ";
+          errEl.append(icon, document.createTextNode(message));
+        }
+        if (!supportsUserInvalid) {
+          dirtyState.set(el, { hasInteracted: true, hasBlurred: true });
+          updateFallbackState(el);
+        }
+      } else {
+        el.setCustomValidity("");
+        if (!supportsUserInvalid) {
+          updateFallbackState(el);
+        }
+      }
+      syncAria(el, false);
+    }
+
+    function init(root) {
+      if (!root) return;
+      root.querySelectorAll("input, select, textarea").forEach((el) => {
+        if (!el.hasAttribute("aria-invalid")) el.setAttribute("aria-invalid", "false");
+      });
+
+      root.addEventListener(
+        "blur",
+        (e) => {
+          const el = e.target;
+          if (!el.checkValidity) return;
+          if (!supportsUserInvalid) {
+            const st = dirtyState.get(el) || { hasInteracted: false, hasBlurred: false };
+            st.hasBlurred = true;
+            dirtyState.set(el, st);
+            if (st.hasInteracted) updateFallbackState(el);
+          }
+          syncAria(el, true);
+        },
+        true
+      );
+
+      root.addEventListener("input", (e) => {
+        const el = e.target;
+        if (!el.checkValidity) return;
+        el.setCustomValidity("");
+        if (!supportsUserInvalid) {
+          const st = dirtyState.get(el) || { hasInteracted: false, hasBlurred: false };
+          st.hasInteracted = true;
+          dirtyState.set(el, st);
+          if (st.hasBlurred) updateFallbackState(el);
+        }
+        if (el.hasAttribute("aria-invalid")) syncAria(el, false);
+      });
+
+      root.addEventListener(
+        "change",
+        (e) => {
+          const el = e.target;
+          if (!el.checkValidity) return;
+          if (!supportsUserInvalid) {
+            const st = dirtyState.get(el) || { hasInteracted: false, hasBlurred: false };
+            st.hasInteracted = true;
+            dirtyState.set(el, st);
+            if (st.hasBlurred) updateFallbackState(el);
+          }
+          syncAria(el, true);
+        },
+        true
+      );
+
+      root.addEventListener(
+        "invalid",
+        (e) => {
+          const el = e.target;
+          if (!supportsUserInvalid) {
+            dirtyState.set(el, { hasInteracted: true, hasBlurred: true });
+            updateFallbackState(el);
+          }
+          announced.add(el);
+          syncAria(el, false);
+        },
+        true
+      );
+
+      root.addEventListener(
+        "reset",
+        (e) => {
+          setTimeout(() => {
+            for (const el of e.target.elements || []) {
+              dirtyState.delete(el);
+              el.classList.remove("user-invalid-fallback", "user-valid-fallback");
+              if (el.setCustomValidity) el.setCustomValidity("");
+              syncAria(el, false);
+            }
+          });
+        },
+        true
+      );
+    }
+
+    return { init, setFieldError, syncAria };
+  })();
+
+  function parseDurationClientMs(raw, defaultUnit) {
+    const trimmed = String(raw || "").trim();
+    if (!trimmed) return null;
+    let mult = defaultUnit === "ms" ? 1 : 1000;
+    let numStr = trimmed;
+    if (trimmed.endsWith("ms")) {
+      mult = 1;
+      numStr = trimmed.slice(0, -2).trim();
+    } else if (trimmed.endsWith("s")) {
+      mult = 1000;
+      numStr = trimmed.slice(0, -1).trim();
+    } else if (trimmed.endsWith("m")) {
+      mult = 60_000;
+      numStr = trimmed.slice(0, -1).trim();
+    } else if (trimmed.endsWith("h")) {
+      mult = 3_600_000;
+      numStr = trimmed.slice(0, -1).trim();
+    }
+    if (!/^\d+$/.test(numStr)) return null;
+    return Number(numStr) * mult;
+  }
+
+  function validateFormBoundsClient() {
+    if (!els.configForm) return true;
+    FormValidationController.setFieldError(els.cfgUrl, "");
+    FormValidationController.setFieldError(els.cfgDuration, "");
+    FormValidationController.setFieldError(els.cfgRampUp, "");
+    FormValidationController.setFieldError(els.cfgTimeout, "");
+    FormValidationController.setFieldError(els.cfgBodyFile, "");
+
+    const rawUrl = els.cfgUrl.value.trim();
+    if (!rawUrl) {
+      FormValidationController.setFieldError(els.cfgUrl, "Enter a target URL.");
+    } else {
+      try {
+        const parsed = new URL(rawUrl);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          FormValidationController.setFieldError(
+            els.cfgUrl,
+            "Only http and https URLs are supported."
+          );
+        }
+      } catch (_) {
+        FormValidationController.setFieldError(
+          els.cfgUrl,
+          "Enter a valid HTTP or HTTPS URL."
+        );
+      }
+    }
+
+    const durMs = parseDurationClientMs(els.cfgDuration.value, "s");
+    if (durMs === null || durMs <= 0) {
+      FormValidationController.setFieldError(
+        els.cfgDuration,
+        "Duration must be greater than 0ms (e.g. 30s)."
+      );
+    }
+
+    const timeoutMs = parseDurationClientMs(els.cfgTimeout.value, "ms");
+    if (timeoutMs === null || timeoutMs <= 0) {
+      FormValidationController.setFieldError(
+        els.cfgTimeout,
+        "Timeout must be greater than 0ms (e.g. 5000ms)."
+      );
+    }
+
+    const rampMs = parseDurationClientMs(els.cfgRampUp.value, "s");
+    if (rampMs === null) {
+      FormValidationController.setFieldError(
+        els.cfgRampUp,
+        "Invalid ramp-up duration (e.g. 0s or 10s)."
+      );
+    } else if (durMs !== null && rampMs > durMs) {
+      FormValidationController.setFieldError(
+        els.cfgRampUp,
+        "Ramp-up cannot exceed total benchmark duration."
+      );
+    }
+
+    if (state.bodyMode === "file" && !els.cfgBodyFile.value.trim()) {
+      FormValidationController.setFieldError(
+        els.cfgBodyFile,
+        "Select or enter a payload file path."
+      );
+    }
+
+    return els.configForm.checkValidity();
+  }
+
+  function updateOsWarningBanner() {
+    if (!els.configOsWarning || !state.system || !state.system.limits) return;
+    const limits = state.system.limits;
+    const conc = Math.max(0, Number(els.cfgConcurrency?.value || 0));
+    const estFds = conc * 2 + 128;
+    if (limits.soft_limit < limits.recommended_min || estFds > limits.soft_limit) {
+      els.configOsWarning.textContent = `OS open file limit is ${limits.soft_limit} (concurrency ${conc} needs ~${estFds} FDs). Lower concurrency or raise ulimit -n if socket errors occur.`;
+      els.configOsWarning.hidden = false;
+    } else {
+      els.configOsWarning.hidden = true;
+      els.configOsWarning.textContent = "";
+    }
+  }
+
+  function markFormDirty(dirty = true) {
+    state.formDirty = dirty;
+    if (els.presetDirtyPill) {
+      els.presetDirtyPill.hidden = !dirty;
+    }
+  }
+
+  function setBodyMode(mode, markDirty = false) {
+    const normalized = mode === "raw" || mode === "file" ? mode : "none";
+    state.bodyMode = normalized;
+    for (const tab of els.bodyTabs) {
+      const selected = tab.dataset.bodyMode === normalized;
+      tab.setAttribute("aria-selected", selected ? "true" : "false");
+      tab.tabIndex = selected ? 0 : -1;
+    }
+    for (const [key, panel] of Object.entries(els.bodyPanels)) {
+      if (!panel) continue;
+      panel.hidden = key !== normalized;
+    }
+    if (markDirty) {
+      markFormDirty(true);
+    }
+  }
+
+  function initBodyTabs() {
+    if (els.bodyTabs.length === 0) return;
+    els.bodyTabs.forEach((tab, idx) => {
+      tab.addEventListener("click", () => {
+        setBodyMode(tab.dataset.bodyMode, true);
+      });
+      tab.addEventListener("keydown", (event) => {
+        let nextIdx = null;
+        if (event.key === "ArrowRight") {
+          nextIdx = (idx + 1) % els.bodyTabs.length;
+        } else if (event.key === "ArrowLeft") {
+          nextIdx = (idx - 1 + els.bodyTabs.length) % els.bodyTabs.length;
+        } else if (event.key === "Home") {
+          nextIdx = 0;
+        } else if (event.key === "End") {
+          nextIdx = els.bodyTabs.length - 1;
+        }
+        if (nextIdx !== null) {
+          event.preventDefault();
+          const target = els.bodyTabs[nextIdx];
+          target.focus();
+          setBodyMode(target.dataset.bodyMode, true);
+        }
+      });
+    });
+  }
+
+  function renderHeaderRows() {
+    if (!els.headersList) return;
+    els.headersList.replaceChildren();
+
+    state.headers.forEach((entry, idx) => {
+      const row = document.createElement("div");
+      row.className = "header-row";
+
+      const enabledCb = document.createElement("input");
+      enabledCb.type = "checkbox";
+      enabledCb.checked = entry.enabled !== false;
+      enabledCb.setAttribute("aria-label", `Enable header ${idx + 1}`);
+      enabledCb.addEventListener("change", () => {
+        entry.enabled = enabledCb.checked;
+        markFormDirty(true);
+      });
+
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.className = "control-input mono";
+      nameInput.placeholder = "Header-Name";
+      nameInput.value = entry.name || "";
+      nameInput.setAttribute("aria-label", `Header ${idx + 1} name`);
+
+      const valInput = document.createElement("input");
+      valInput.className = "control-input mono";
+      valInput.placeholder = "Value";
+      valInput.value = entry.value || "";
+      valInput.setAttribute("aria-label", `Header ${idx + 1} value`);
+
+      const syncSensitiveType = () => {
+        const sensitive = isSensitiveHeaderName(nameInput.value);
+        if (sensitive && !entry._revealed) {
+          valInput.type = "password";
+          revealBtn.hidden = false;
+        } else if (sensitive) {
+          valInput.type = "text";
+          revealBtn.hidden = false;
+        } else {
+          valInput.type = "text";
+          revealBtn.hidden = true;
+        }
+      };
+
+      const revealBtn = document.createElement("button");
+      revealBtn.type = "button";
+      revealBtn.className = "btn btn-secondary btn-sm";
+      revealBtn.textContent = entry._revealed ? "Hide" : "Show";
+      revealBtn.addEventListener("click", () => {
+        entry._revealed = !entry._revealed;
+        revealBtn.textContent = entry._revealed ? "Hide" : "Show";
+        syncSensitiveType();
+      });
+
+      nameInput.addEventListener("input", () => {
+        entry.name = nameInput.value;
+        syncSensitiveType();
+        markFormDirty(true);
+      });
+
+      valInput.addEventListener("input", () => {
+        entry.value = valInput.value;
+        markFormDirty(true);
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn btn-secondary btn-sm";
+      removeBtn.textContent = "×";
+      removeBtn.setAttribute("aria-label", `Remove header ${idx + 1}`);
+      removeBtn.addEventListener("click", () => {
+        state.headers.splice(idx, 1);
+        renderHeaderRows();
+        markFormDirty(true);
+      });
+
+      syncSensitiveType();
+      row.append(enabledCb, nameInput, valInput, revealBtn, removeBtn);
+      els.headersList.appendChild(row);
+    });
+  }
+
+  function updateRawBodyByteCount() {
+    if (!els.bodyRawBytes || !els.cfgBodyRaw) return;
+    const bytes = new TextEncoder().encode(els.cfgBodyRaw.value || "").length;
+    els.bodyRawBytes.textContent = formatBytes(bytes);
+  }
+
+  function readFormConfig() {
+    const outPath = els.cfgOutputJson?.value.trim() || null;
+    const bodyFile = els.cfgBodyFile?.value.trim() || null;
+    const bodyRaw = els.cfgBodyRaw?.value || "";
+    return {
+      url: els.cfgUrl.value.trim(),
+      method: els.cfgMethod.value,
+      concurrency: Math.max(1, Number(els.cfgConcurrency.value || 700)),
+      duration: els.cfgDuration.value.trim(),
+      ramp_up: els.cfgRampUp.value.trim(),
+      timeout: els.cfgTimeout.value.trim(),
+      headers: state.headers
+        .filter((h) => h.name.trim().length > 0 || h.value.trim().length > 0)
+        .map((h) => ({
+          name: h.name,
+          value: h.value,
+          enabled: h.enabled !== false,
+        })),
+      body_mode: state.bodyMode,
+      body: state.bodyMode === "raw" ? bodyRaw : null,
+      body_file: state.bodyMode === "file" ? bodyFile : null,
+      output_json: outPath,
+    };
+  }
+
+  function populateFormConfig(cfg, presetId = null, dirty = false) {
+    const c = cfg || {};
+    els.cfgMethod.value = String(c.method || "GET").toUpperCase();
+    els.cfgUrl.value = c.url || "";
+    els.cfgConcurrency.value = String(c.concurrency || 700);
+    els.cfgDuration.value = c.duration || "30s";
+    els.cfgRampUp.value = c.ramp_up || "0s";
+    els.cfgTimeout.value = c.timeout || "5000ms";
+    els.cfgOutputJson.value = c.output_json || "";
+    els.cfgBodyRaw.value = c.body || "";
+    els.cfgBodyFile.value = c.body_file || "";
+    if (els.bodyFileMeta) els.bodyFileMeta.textContent = "";
+
+    state.headers = Array.isArray(c.headers)
+      ? c.headers.map((h) => ({
+          name: h.name || "",
+          value: h.value || "",
+          enabled: h.enabled !== false,
+          _revealed: false,
+        }))
+      : [];
+    renderHeaderRows();
+    setBodyMode(c.body_mode || "none", false);
+    updateRawBodyByteCount();
+    updateOsWarningBanner();
+
+    state.selectedPresetId = presetId;
+    if (els.presetDeleteBtn) {
+      els.presetDeleteBtn.disabled = !presetId;
+    }
+    if (els.configFormError) {
+      els.configFormError.hidden = true;
+    }
+    if (els.cliPreviewBox) {
+      els.cliPreviewBox.hidden = true;
+    }
+    markFormDirty(dirty);
+  }
+
+  function renderPresetSelect() {
+    if (!els.presetSelect) return;
+    const prevValue = state.selectedPresetId ? `preset:${state.selectedPresetId}` : "";
+    els.presetSelect.replaceChildren();
+
+    const defaultOpt = document.createElement("option");
+    defaultOpt.value = "";
+    defaultOpt.textContent = "-- Custom / Unsaved Configuration --";
+    els.presetSelect.appendChild(defaultOpt);
+
+    if (state.presets.length > 0) {
+      const grp = document.createElement("optgroup");
+      grp.label = "Saved Presets";
+      for (const preset of state.presets) {
+        const opt = document.createElement("option");
+        opt.value = `preset:${preset.id}`;
+        opt.textContent = `${preset.name} (${preset.config.method} ${preset.config.concurrency} VUs)`;
+        grp.appendChild(opt);
+      }
+      els.presetSelect.appendChild(grp);
+    }
+
+    if (state.recent.length > 0) {
+      const grp = document.createElement("optgroup");
+      grp.label = "Recent Runs";
+      for (const rec of state.recent) {
+        const opt = document.createElement("option");
+        opt.value = `recent:${rec.id}`;
+        const label = rec.preset_name ? `[${rec.preset_name}] ` : "";
+        opt.textContent = `${label}${rec.config.method} ${rec.config.url} (${rec.config.concurrency} VUs)`;
+        grp.appendChild(opt);
+      }
+      els.presetSelect.appendChild(grp);
+    }
+
+    els.presetSelect.value = prevValue;
+    if (els.presetDeleteBtn) {
+      els.presetDeleteBtn.disabled = !state.selectedPresetId;
+    }
+  }
+
+  async function fetchSystemInfo() {
+    const resp = await apiFetch("/api/system");
+    if (!resp.ok) throw new Error(`Failed to fetch /api/system (${resp.status})`);
+    state.system = await resp.json();
+
+    if (els.chooseBodyFileBtn) {
+      els.chooseBodyFileBtn.hidden = !state.system.native_dialogs;
+    }
+
+    if (state.system.initial_config) {
+      populateFormConfig(state.system.initial_config, null, true);
+    } else {
+      updateOsWarningBanner();
+    }
+  }
+
+  async function fetchPresets() {
+    const resp = await apiFetch("/api/presets");
+    if (!resp.ok) throw new Error(`Failed to fetch presets (${resp.status})`);
+    const payload = await resp.json();
+    state.presets = Array.isArray(payload.presets) ? payload.presets : [];
+    state.recent = Array.isArray(payload.recent) ? payload.recent : [];
+    renderPresetSelect();
+  }
+
+  async function fetchRunHistory() {
+    const resp = await apiFetch("/api/runs");
+    if (!resp.ok) return;
+    state.runs = await resp.json();
+    renderRunHistoryTable();
+  }
+
+  function renderRunHistoryTable() {
+    if (!els.runHistoryBody || !els.runHistoryCount) return;
+    els.runHistoryCount.textContent = `${state.runs.length} run${state.runs.length === 1 ? "" : "s"}`;
+    els.runHistoryBody.replaceChildren();
+
+    // Prune stale compare IDs
+    const validIds = new Set(state.runs.map((r) => r.run_id));
+    state.compareIds = state.compareIds.filter((id) => validIds.has(id));
+
+    if (state.runs.length === 0) {
+      const tr = document.createElement("tr");
+      const th = document.createElement("th");
+      th.scope = "row";
+      th.textContent = "--";
+      const tdTarget = document.createElement("td");
+      tdTarget.textContent = "No runs recorded yet";
+      const tdVus = document.createElement("td");
+      tdVus.textContent = "--";
+      const tdRps = document.createElement("td");
+      tdRps.textContent = "--";
+      const tdLat = document.createElement("td");
+      tdLat.textContent = "--";
+      const tdErr = document.createElement("td");
+      tdErr.textContent = "--";
+      const tdAct = document.createElement("td");
+      tdAct.textContent = "--";
+      tr.append(th, tdTarget, tdVus, tdRps, tdLat, tdErr, tdAct);
+      els.runHistoryBody.appendChild(tr);
+      renderCompareStrip();
+      return;
+    }
+
+    for (const run of state.runs) {
+      const tr = document.createElement("tr");
+
+      const thCmp = document.createElement("th");
+      thCmp.scope = "row";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = state.compareIds.includes(run.run_id);
+      cb.setAttribute("aria-label", `Compare run ${run.url}`);
+      cb.addEventListener("change", () => {
+        if (cb.checked) {
+          if (state.compareIds.length >= 2) {
+            state.compareIds.shift();
+          }
+          state.compareIds.push(run.run_id);
+        } else {
+          state.compareIds = state.compareIds.filter((id) => id !== run.run_id);
+        }
+        renderRunHistoryTable();
+      });
+      thCmp.appendChild(cb);
+
+      const tdTarget = document.createElement("td");
+      tdTarget.className = "mono";
+      const prefix = run.preset_name ? `[${run.preset_name}] ` : "";
+      tdTarget.textContent = `${prefix}${run.method} ${run.url}`;
+
+      const tdVus = document.createElement("td");
+      tdVus.textContent = String(run.concurrency);
+
+      const tdRps = document.createElement("td");
+      tdRps.textContent =
+        run.phase === "failed" ? "Failed" : `${run.requests_per_sec.toFixed(1)} req/s`;
+
+      const tdLat = document.createElement("td");
+      tdLat.textContent =
+        run.phase === "failed"
+          ? run.error_message || "--"
+          : `${run.p50_ms.toFixed(1)} / ${run.p95_ms.toFixed(1)} / ${run.p99_ms.toFixed(1)} ms`;
+
+      const tdErr = document.createElement("td");
+      tdErr.textContent = `${run.error_rate_pct.toFixed(2)}%`;
+
+      const tdActions = document.createElement("td");
+      const wrap = document.createElement("div");
+      wrap.className = "history-actions";
+
+      const inspectBtn = document.createElement("button");
+      inspectBtn.type = "button";
+      inspectBtn.className = "btn btn-secondary btn-sm";
+      inspectBtn.textContent = state.viewingRunId === run.run_id ? "Viewing" : "Inspect";
+      inspectBtn.addEventListener("click", () => inspectHistoricalRun(run.run_id));
+
+      const loadBtn = document.createElement("button");
+      loadBtn.type = "button";
+      loadBtn.className = "btn btn-secondary btn-sm";
+      loadBtn.textContent = "Load";
+      loadBtn.addEventListener("click", () => loadRunConfigIntoForm(run.run_id));
+
+      wrap.append(inspectBtn, loadBtn);
+      tdActions.appendChild(wrap);
+
+      tr.append(thCmp, tdTarget, tdVus, tdRps, tdLat, tdErr, tdActions);
+      els.runHistoryBody.appendChild(tr);
+    }
+
+    renderCompareStrip();
+  }
+
+  function renderCompareStrip() {
+    if (!els.runComparePanel) return;
+    if (state.compareIds.length !== 2) {
+      els.runComparePanel.hidden = true;
+      els.runComparePanel.replaceChildren();
+      return;
+    }
+
+    const runA = state.runs.find((r) => r.run_id === state.compareIds[0]);
+    const runB = state.runs.find((r) => r.run_id === state.compareIds[1]);
+    if (!runA || !runB) {
+      els.runComparePanel.hidden = true;
+      return;
+    }
+    // Compare chronologically: older run as Baseline (A), newer run as Candidate (B)
+    const idxA = state.runs.indexOf(runA);
+    const idxB = state.runs.indexOf(runB);
+    const [a, b] = idxA > idxB ? [runA, runB] : [runB, runA];
+
+    const metrics = [
+      {
+        label: "Avg RPS (B vs A)",
+        val: `${b.requests_per_sec.toFixed(1)} vs ${a.requests_per_sec.toFixed(1)}`,
+        delta: b.requests_per_sec - a.requests_per_sec,
+        pct: a.requests_per_sec > 0 ? ((b.requests_per_sec - a.requests_per_sec) / a.requests_per_sec) * 100 : 0,
+        higherIsBetter: true,
+        unit: "req/s",
+      },
+      {
+        label: "p50 Latency",
+        val: `${b.p50_ms.toFixed(2)} vs ${a.p50_ms.toFixed(2)} ms`,
+        delta: b.p50_ms - a.p50_ms,
+        pct: a.p50_ms > 0 ? ((b.p50_ms - a.p50_ms) / a.p50_ms) * 100 : 0,
+        higherIsBetter: false,
+        unit: "ms",
+      },
+      {
+        label: "p95 Latency",
+        val: `${b.p95_ms.toFixed(2)} vs ${a.p95_ms.toFixed(2)} ms`,
+        delta: b.p95_ms - a.p95_ms,
+        pct: a.p95_ms > 0 ? ((b.p95_ms - a.p95_ms) / a.p95_ms) * 100 : 0,
+        higherIsBetter: false,
+        unit: "ms",
+      },
+      {
+        label: "p99 Latency",
+        val: `${b.p99_ms.toFixed(2)} vs ${a.p99_ms.toFixed(2)} ms`,
+        delta: b.p99_ms - a.p99_ms,
+        pct: a.p99_ms > 0 ? ((b.p99_ms - a.p99_ms) / a.p99_ms) * 100 : 0,
+        higherIsBetter: false,
+        unit: "ms",
+      },
+      {
+        label: "Error Rate",
+        val: `${b.error_rate_pct.toFixed(2)}% vs ${a.error_rate_pct.toFixed(2)}%`,
+        delta: b.error_rate_pct - a.error_rate_pct,
+        pct: null,
+        higherIsBetter: false,
+        unit: "pp",
+      },
+    ];
+
+    els.runComparePanel.replaceChildren();
+    for (const m of metrics) {
+      const card = document.createElement("div");
+      card.className = "compare-card";
+      const k = document.createElement("div");
+      k.className = "stat-k";
+      k.textContent = m.label;
+      const v = document.createElement("div");
+      v.className = "stat-v";
+      v.textContent = m.val;
+      const d = document.createElement("div");
+      const sign = m.delta >= 0 ? "+" : "";
+      const pctStr = m.pct !== null ? ` (${sign}${m.pct.toFixed(1)}%)` : "";
+      d.textContent = `${sign}${m.delta.toFixed(2)} ${m.unit}${pctStr}`;
+      const improved = m.higherIsBetter ? m.delta > 0 : m.delta < 0;
+      const regressed = m.higherIsBetter ? m.delta < 0 : m.delta > 0;
+      d.className = `stat-delta ${improved ? "delta-better" : regressed ? "delta-worse" : ""}`;
+      card.append(k, v, d);
+      els.runComparePanel.appendChild(card);
+    }
+    els.runComparePanel.hidden = false;
+  }
+
+  async function inspectHistoricalRun(runId) {
+    try {
+      const resp = await apiFetch(`/api/runs/${encodeURIComponent(runId)}`);
+      if (!resp.ok) throw new Error(`Unable to fetch run (${resp.status})`);
+      const record = await resp.json();
+
+      if (!state.viewingRunId) {
+        state.liveMeta = state.meta;
+        state.liveFinalStats = state.finalStats;
+        state.liveSnapshots = state.snapshots.slice();
+      }
+
+      state.viewingRunId = record.run_id;
+      if (els.returnLiveBtn) els.returnLiveBtn.hidden = false;
+      showBanner(`Inspecting archived run (${record.meta.method} ${record.meta.url}).`);
+
+      resetTelemetryDisplay();
+      updateMetaDisplay(record.meta);
+      if (Array.isArray(record.snapshots) && record.snapshots.length > 0) {
+        mergeSnapshots(record.snapshots);
+      }
+      if (record.stats) {
+        applyFinalStats(record.stats);
+      } else if (record.error_message) {
+        setPhaseBadge("failed");
+        showBanner(`Archived run failed: ${record.error_message}`, true);
+      }
+      renderRunHistoryTable();
+    } catch (err) {
+      showBanner(err.message, true);
+    }
+  }
+
+  function returnToLiveView() {
+    state.viewingRunId = null;
+    if (els.returnLiveBtn) els.returnLiveBtn.hidden = true;
+    hideBanner();
+
+    resetTelemetryDisplay();
+    if (state.liveMeta) {
+      updateMetaDisplay(state.liveMeta);
+    }
+    if (state.liveSnapshots.length > 0) {
+      mergeSnapshots(state.liveSnapshots);
+    }
+    if (state.liveFinalStats) {
+      applyFinalStats(state.liveFinalStats);
+    }
+    renderRunHistoryTable();
+  }
+
+  async function loadRunConfigIntoForm(runId) {
+    try {
+      const resp = await apiFetch(`/api/runs/${encodeURIComponent(runId)}`);
+      if (!resp.ok) throw new Error(`Unable to fetch run (${resp.status})`);
+      const record = await resp.json();
+      populateFormConfig(record.config_redacted, null, true);
+      if (els.presetSelect) els.presetSelect.value = "";
+    } catch (err) {
+      showBanner(err.message, true);
+    }
+  }
+
+  async function startInteractiveRun() {
+    if (els.configFormError) els.configFormError.hidden = true;
+    if (!validateFormBoundsClient()) {
+      const firstInvalid = els.configForm.querySelector(":invalid");
+      if (firstInvalid) firstInvalid.focus();
+      return;
+    }
+
+    const cfg = readFormConfig();
+    const presetObj = state.presets.find((p) => p.id === state.selectedPresetId);
+    const presetName = presetObj ? presetObj.name : null;
+
+    if (els.startRunBtn) {
+      els.startRunBtn.disabled = true;
+      els.startRunBtn.textContent = "Starting...";
+    }
+
+    try {
+      const resp = await apiFetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: cfg, preset_name: presetName }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        if (data.validation && data.validation.field_errors) {
+          applyServerFieldErrors(data.validation.field_errors);
+        }
+        if (els.configFormError) {
+          els.configFormError.textContent = data.error || `Failed to start run (${resp.status})`;
+          els.configFormError.hidden = false;
+        }
+        syncRunButtonsForPhase(state.meta?.phase || "idle");
+        return;
+      }
+
+      if (state.viewingRunId) {
+        state.viewingRunId = null;
+        if (els.returnLiveBtn) els.returnLiveBtn.hidden = true;
+      }
+      state.activeRunId = data.run_id;
+      await fetchPresets().catch(() => {});
+    } catch (err) {
+      if (els.configFormError) {
+        els.configFormError.textContent = `Request failed: ${err.message}`;
+        els.configFormError.hidden = false;
+      }
+      syncRunButtonsForPhase(state.meta?.phase || "idle");
+    }
+  }
+
+  function applyServerFieldErrors(fieldErrors) {
+    const fieldMap = {
+      url: els.cfgUrl,
+      concurrency: els.cfgConcurrency,
+      duration: els.cfgDuration,
+      ramp_up: els.cfgRampUp,
+      timeout: els.cfgTimeout,
+      body_file: els.cfgBodyFile,
+    };
+    for (const [key, msg] of Object.entries(fieldErrors || {})) {
+      if (fieldMap[key]) {
+        FormValidationController.setFieldError(fieldMap[key], msg);
+      }
+    }
+  }
+
+  async function stopActiveRun() {
+    if (state.stopRequested) return;
+    if (state.mode === "cli" && state.completed) return;
+    if (state.mode === "interactive" && !isActivePhase(state.meta?.phase)) return;
+
+    state.stopRequested = true;
+    if (els.stopRunBtn) {
+      els.stopRunBtn.disabled = true;
+      els.stopRunBtn.textContent = "Stopping...";
+    }
+    setPhaseBadge("draining");
+    try {
+      await apiFetch("/api/stop", { method: "POST" });
+    } catch (_) {
+      state.stopRequested = false;
+      syncRunButtonsForPhase(state.meta?.phase || "running");
+    }
+  }
+
+  function initInteractiveControls() {
+    if (els.cfgUrl) {
+      els.cfgUrl.placeholder = EXAMPLE_URL_PLACEHOLDER;
+    }
+
+    FormValidationController.init(els.configForm);
+    initBodyTabs();
+
+    if (els.toggleSidebarBtn && els.workspaceLayout) {
+      els.toggleSidebarBtn.addEventListener("click", () => {
+        const collapsed = els.workspaceLayout.classList.toggle("sidebar-collapsed");
+        els.toggleSidebarBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        drawAllCharts();
+      });
+    }
+
+    if (els.returnLiveBtn) {
+      els.returnLiveBtn.addEventListener("click", returnToLiveView);
+    }
+
+    if (els.configForm) {
+      els.configForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        startInteractiveRun();
+      });
+
+      els.configForm.addEventListener("input", () => {
+        markFormDirty(true);
+        updateOsWarningBanner();
+      });
+    }
+
+    if (els.cfgBodyRaw) {
+      els.cfgBodyRaw.addEventListener("input", updateRawBodyByteCount);
+    }
+
+    if (els.formatJsonBtn && els.cfgBodyRaw) {
+      els.formatJsonBtn.addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse(els.cfgBodyRaw.value);
+          els.cfgBodyRaw.value = JSON.stringify(parsed, null, 2);
+          updateRawBodyByteCount();
+          markFormDirty(true);
+        } catch (err) {
+          showBanner(`Body is not valid JSON: ${err.message}`, true);
+        }
+      });
+    }
+
+    if (els.addHeaderBtn) {
+      els.addHeaderBtn.addEventListener("click", () => {
+        state.headers.push({ name: "", value: "", enabled: true, _revealed: false });
+        renderHeaderRows();
+        markFormDirty(true);
+      });
+    }
+
+    if (els.chooseBodyFileBtn) {
+      els.chooseBodyFileBtn.addEventListener("click", async () => {
+        try {
+          const resp = await apiFetch("/api/dialog/open-body-file", { method: "POST" });
+          const data = await resp.json();
+          if (resp.ok && !data.cancelled && data.path) {
+            els.cfgBodyFile.value = data.path;
+            FormValidationController.setFieldError(els.cfgBodyFile, "");
+            if (els.bodyFileMeta) {
+              els.bodyFileMeta.textContent = `Selected file (${formatBytes(data.size_bytes)})`;
+            }
+            markFormDirty(true);
+          }
+        } catch (err) {
+          showBanner(`Unable to open file picker: ${err.message}`, true);
+        }
+      });
+    }
+
+    if (els.copyCliBtn) {
+      els.copyCliBtn.addEventListener("click", async () => {
+        const cfg = readFormConfig();
+        try {
+          const resp = await apiFetch("/api/runs/validate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cfg),
+          });
+          const data = await resp.json();
+          const cmd = data.cli_command || "";
+          if (els.cliPreviewBox) {
+            els.cliPreviewBox.textContent = cmd;
+            els.cliPreviewBox.hidden = false;
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(cmd);
+            const orig = els.copyCliBtn.textContent;
+            els.copyCliBtn.textContent = "Copied!";
+            setTimeout(() => {
+              els.copyCliBtn.textContent = orig;
+            }, 1400);
+          }
+        } catch (err) {
+          showBanner(`Failed to build CLI command: ${err.message}`, true);
+        }
+      });
+    }
+
+    if (els.presetSelect) {
+      els.presetSelect.addEventListener("change", () => {
+        const val = els.presetSelect.value;
+        if (!val) {
+          state.selectedPresetId = null;
+          if (els.presetDeleteBtn) els.presetDeleteBtn.disabled = true;
+          return;
+        }
+        if (val.startsWith("preset:")) {
+          const id = val.slice(7);
+          const preset = state.presets.find((p) => p.id === id);
+          if (preset) {
+            populateFormConfig(preset.config, preset.id, false);
+          }
+        } else if (val.startsWith("recent:")) {
+          const id = val.slice(7);
+          const rec = state.recent.find((r) => r.id === id);
+          if (rec) {
+            populateFormConfig(rec.config, null, true);
+          }
+        }
+      });
+    }
+
+    if (els.presetNewBtn) {
+      els.presetNewBtn.addEventListener("click", () => {
+        if (els.presetSelect) els.presetSelect.value = "";
+        populateFormConfig(null, null, false);
+      });
+    }
+
+    if (els.presetSaveBtn) {
+      els.presetSaveBtn.addEventListener("click", async () => {
+        if (!state.selectedPresetId) {
+          openSavePresetPanel("create");
+          return;
+        }
+        const existing = state.presets.find((p) => p.id === state.selectedPresetId);
+        if (!existing) {
+          openSavePresetPanel("create");
+          return;
+        }
+        try {
+          const resp = await apiFetch(`/api/presets/${encodeURIComponent(existing.id)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: existing.name,
+              description: existing.description,
+              config: readFormConfig(),
+            }),
+          });
+          if (!resp.ok) throw new Error(`Save failed (${resp.status})`);
+          await fetchPresets();
+          markFormDirty(false);
+        } catch (err) {
+          showBanner(err.message, true);
+        }
+      });
+    }
+
+    if (els.presetSaveAsBtn) {
+      els.presetSaveAsBtn.addEventListener("click", () => openSavePresetPanel("create"));
+    }
+
+    if (els.presetCancelBtn && els.presetSavePanel) {
+      els.presetCancelBtn.addEventListener("click", () => {
+        els.presetSavePanel.hidden = true;
+      });
+    }
+
+    if (els.presetCommitBtn) {
+      els.presetCommitBtn.addEventListener("click", commitSavePreset);
+    }
+
+    if (els.presetDeleteBtn && els.presetDeleteConfirm) {
+      els.presetDeleteBtn.addEventListener("click", () => {
+        if (!state.selectedPresetId) return;
+        els.presetDeleteConfirm.hidden = false;
+      });
+    }
+
+    if (els.presetDeleteCancelBtn && els.presetDeleteConfirm) {
+      els.presetDeleteCancelBtn.addEventListener("click", () => {
+        els.presetDeleteConfirm.hidden = true;
+      });
+    }
+
+    if (els.presetDeleteConfirmBtn && els.presetDeleteConfirm) {
+      els.presetDeleteConfirmBtn.addEventListener("click", async () => {
+        if (!state.selectedPresetId) return;
+        try {
+          const resp = await apiFetch(
+            `/api/presets/${encodeURIComponent(state.selectedPresetId)}`,
+            { method: "DELETE" }
+          );
+          if (!resp.ok) throw new Error(`Delete failed (${resp.status})`);
+          els.presetDeleteConfirm.hidden = true;
+          state.selectedPresetId = null;
+          await fetchPresets();
+          markFormDirty(true);
+        } catch (err) {
+          showBanner(err.message, true);
+        }
+      });
+    }
+
+    // Keyboard shortcuts: Cmd+Enter (Start) and Cmd+. (Stop)
+    document.addEventListener("keydown", (event) => {
+      if (state.mode !== "interactive") return;
+      if (event.metaKey && event.key === "Enter") {
+        if (!isActivePhase(state.meta?.phase)) {
+          event.preventDefault();
+          startInteractiveRun();
+        }
+      } else if (event.metaKey && event.key === ".") {
+        if (isActivePhase(state.meta?.phase)) {
+          event.preventDefault();
+          stopActiveRun();
+        }
+      }
+    });
+  }
+
+  function openSavePresetPanel(mode) {
+    if (!els.presetSavePanel) return;
+    state.presetSaveMode = mode;
+    const current = state.presets.find((p) => p.id === state.selectedPresetId);
+    els.presetNameInput.value = current ? `${current.name} (Copy)` : "";
+    els.presetDescInput.value = current?.description || "";
+    FormValidationController.setFieldError(els.presetNameInput, "");
+    els.presetSavePanel.hidden = false;
+    els.presetNameInput.focus();
+  }
+
+  async function commitSavePreset() {
+    const name = els.presetNameInput.value.trim();
+    if (!name) {
+      FormValidationController.setFieldError(els.presetNameInput, "Enter a name for this preset.");
+      els.presetNameInput.focus();
+      return;
+    }
+
+    try {
+      const resp = await apiFetch("/api/presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          description: els.presetDescInput.value.trim() || null,
+          config: readFormConfig(),
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to save preset (${resp.status})`);
+      }
+      const saved = await resp.json();
+      els.presetSavePanel.hidden = true;
+      state.selectedPresetId = saved.id;
+      await fetchPresets();
+      markFormDirty(false);
+    } catch (err) {
+      showBanner(err.message, true);
+    }
+  }
+
   async function fetchMeta() {
-    const resp = await fetch("/api/meta", { cache: "no-store" });
+    const resp = await apiFetch("/api/meta");
     if (!resp.ok) {
       throw new Error(`Failed to fetch metadata (${resp.status})`);
     }
     const meta = await resp.json();
+    state.mode = meta.mode === "interactive" ? "interactive" : "cli";
+    state.liveMeta = meta;
     updateMetaDisplay(meta);
+    return meta;
   }
 
   async function fetchAbout() {
-    const resp = await fetch("/api/about", { cache: "no-store" });
+    const resp = await apiFetch("/api/about");
     if (!resp.ok) {
       throw new Error(`Failed to fetch about payload (${resp.status})`);
     }
@@ -896,7 +2281,7 @@
   }
 
   async function fetchChangelog() {
-    const resp = await fetch("/api/changelog", { cache: "no-store" });
+    const resp = await apiFetch("/api/changelog");
     if (!resp.ok) {
       throw new Error(`Failed to fetch changelog (${resp.status})`);
     }
@@ -919,33 +2304,29 @@
       const headerRow = document.createElement("div");
       headerRow.className = "release-card-header";
       const verTag = document.createElement("span");
-      verTag.className = "release-version-tag mono";
+      verTag.className = "release-version-tag";
       verTag.textContent = `v${entry.version}`;
       headerRow.appendChild(verTag);
-
       if (entry.date) {
         const dateTag = document.createElement("span");
-        dateTag.className = "release-date-tag mono";
+        dateTag.className = "release-date-tag";
         dateTag.textContent = entry.date;
         headerRow.appendChild(dateTag);
       }
       container.appendChild(headerRow);
     }
 
-    const lines = String(entry.notes || "")
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
-
+    const notes = Array.isArray(entry.notes) ? entry.notes : [];
     let currentList = null;
-    for (const line of lines) {
+
+    for (const line of notes) {
       if (line.startsWith("### ")) {
         const cat = document.createElement("h4");
         cat.className = "release-category-title";
         cat.textContent = line.slice(4).trim();
         container.appendChild(cat);
         currentList = null;
-      } else if (line.startsWith("- ") || line.startsWith("* ")) {
+      } else if (line.startsWith("- ")) {
         if (!currentList) {
           currentList = document.createElement("ul");
           currentList.className = "release-notes-list";
@@ -966,7 +2347,7 @@
 
   function updateAboutDisplay(about) {
     state.about = about;
-    const versionText = `v${about.version || "0.1.0"}`;
+    const versionText = `v${about.version || "0.2.0"}`;
     if (els.appVersionPill) {
       els.appVersionPill.textContent = versionText;
     }
@@ -1030,7 +2411,6 @@
       dialog.returnValue = "";
     });
 
-    // Fallback for browsers without native <dialog closedby="any"> support
     if (!("closedBy" in HTMLDialogElement.prototype)) {
       dialog.addEventListener("click", (event) => {
         if (event.target !== dialog) return;
@@ -1073,7 +2453,7 @@
   }
 
   async function fetchHistory() {
-    const resp = await fetch("/api/history", { cache: "no-store" });
+    const resp = await apiFetch("/api/history");
     if (!resp.ok) {
       throw new Error(`Failed to fetch history (${resp.status})`);
     }
@@ -1090,12 +2470,50 @@
     state.eventSource = es;
 
     es.onopen = () => {
-      hideBanner();
+      if (!state.viewingRunId) {
+        hideBanner();
+      }
       if (state.hadDisconnect) {
         state.hadDisconnect = false;
         fetchHistory().catch(() => {});
       }
     };
+
+    es.addEventListener("state", (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.meta) {
+          state.liveMeta = payload.meta;
+          if (!state.viewingRunId) {
+            updateMetaDisplay(payload.meta);
+          }
+        }
+        if (Array.isArray(payload.history) && payload.history.length > 0) {
+          if (!state.viewingRunId) {
+            mergeSnapshots(payload.history);
+          } else {
+            state.liveSnapshots = payload.history.slice();
+          }
+        }
+      } catch (_) {}
+    });
+
+    es.addEventListener("run_started", (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        state.activeRunId = payload.run_id || null;
+        state.liveMeta = payload.meta || null;
+        state.liveSnapshots = [];
+        state.liveFinalStats = null;
+        state.viewingRunId = null;
+        if (els.returnLiveBtn) els.returnLiveBtn.hidden = true;
+        hideBanner();
+        resetTelemetryDisplay();
+        if (payload.meta) {
+          updateMetaDisplay(payload.meta);
+        }
+      } catch (_) {}
+    });
 
     es.addEventListener("snapshot", (event) => {
       try {
@@ -1106,15 +2524,51 @@
 
     es.addEventListener("complete", (event) => {
       try {
-        const stats = JSON.parse(event.data);
-        applyFinalStats(stats);
+        const payload = JSON.parse(event.data);
+        const stats = payload.stats ? payload.stats : payload;
+        state.liveFinalStats = stats;
+        if (payload.meta) {
+          state.liveMeta = payload.meta;
+        }
+        if (!state.viewingRunId) {
+          if (payload.meta) {
+            updateMetaDisplay(payload.meta);
+          }
+          applyFinalStats(stats);
+        }
+        if (state.mode === "interactive") {
+          fetchRunHistory().catch(() => {});
+        }
       } catch (_) {}
-      es.close();
-      state.eventSource = null;
+
+      if (state.mode === "cli") {
+        es.close();
+        state.eventSource = null;
+      }
+    });
+
+    es.addEventListener("run_failed", (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.meta) {
+          state.liveMeta = payload.meta;
+        }
+        if (!state.viewingRunId) {
+          if (payload.meta) {
+            updateMetaDisplay(payload.meta);
+          }
+          setPhaseBadge("failed");
+          syncRunButtonsForPhase("failed");
+          showBanner(`Benchmark run failed: ${payload.error || "unknown error"}`, true);
+        }
+        if (state.mode === "interactive") {
+          fetchRunHistory().catch(() => {});
+        }
+      } catch (_) {}
     });
 
     es.onerror = () => {
-      if (state.completed) {
+      if (state.mode === "cli" && state.completed) {
         es.close();
         return;
       }
@@ -1137,20 +2591,30 @@
     }
 
     if (els.stopRunBtn) {
-      els.stopRunBtn.addEventListener("click", async () => {
-        if (state.stopRequested || state.completed) return;
-        state.stopRequested = true;
-        els.stopRunBtn.disabled = true;
-        els.stopRunBtn.textContent = "Stopping...";
-        setPhaseBadge("draining");
+      els.stopRunBtn.addEventListener("click", stopActiveRun);
+    }
+
+    if (els.exportJsonBtn) {
+      els.exportJsonBtn.addEventListener("click", async (event) => {
+        if (state.mode !== "interactive" || !state.system || !state.system.native_dialogs) {
+          return;
+        }
+        event.preventDefault();
+        const runId = state.viewingRunId || state.activeRunId || state.meta?.run_id || null;
         try {
-          await fetch("/api/stop", { method: "POST" });
-        } catch (_) {
-          if (!state.completed) {
-            state.stopRequested = false;
-            els.stopRunBtn.disabled = false;
-            els.stopRunBtn.textContent = "Stop Run";
+          const resp = await apiFetch("/api/dialog/save-json", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ run_id: runId }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) {
+            showBanner(data.error || `Export failed (${resp.status})`, true);
+          } else if (!data.cancelled && data.path) {
+            showBanner(`Saved JSON report to ${data.path}`);
           }
+        } catch (err) {
+          showBanner(`Export failed: ${err.message}`, true);
         }
       });
     }
@@ -1180,9 +2644,24 @@
     fetchAbout().catch(() => {});
 
     try {
-      await Promise.all([fetchMeta(), fetchHistory()]);
+      const meta = await fetchMeta();
+      if (meta.mode === "interactive") {
+        if (els.toggleSidebarBtn) els.toggleSidebarBtn.hidden = false;
+        if (els.configSidebar) els.configSidebar.hidden = false;
+        if (els.runHistoryPanel) els.runHistoryPanel.hidden = false;
+        initInteractiveControls();
+        await Promise.all([
+          fetchSystemInfo(),
+          fetchPresets(),
+          fetchRunHistory(),
+          fetchHistory(),
+        ]);
+        syncRunButtonsForPhase(meta.phase || "idle");
+      } else {
+        await fetchHistory();
+      }
     } catch (err) {
-      showBanner(`Unable to load initial telemetry: ${err.message}`);
+      showBanner(`Unable to load initial telemetry: ${err.message}`, true);
     }
 
     connectStream();

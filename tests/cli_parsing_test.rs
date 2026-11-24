@@ -382,10 +382,27 @@ fn test_changelog_cli_flag_without_url() {
     assert!(cli.changelog);
     assert_eq!(cli.url, "");
 
-    // Without --changelog, omitting --url must still fail clap validation
+    // Without --changelog, --desktop, or --ui-serve, omitting --url must still fail clap validation
     let missing_url = Cli::try_parse_from(["rusty-loader"]);
     assert!(
         missing_url.is_err(),
-        "omitting both --url and --changelog must be rejected"
+        "omitting --url and interactive mode flags must be rejected"
     );
+}
+
+#[test]
+fn test_desktop_and_ui_serve_flags_without_url() {
+    let desktop = Cli::try_parse_from(["rusty-loader", "--desktop"])
+        .expect("--desktop should parse without --url");
+    assert!(desktop.desktop);
+    assert!(!desktop.ui_serve);
+
+    let ui_alias = Cli::try_parse_from(["rusty-loader", "--ui"])
+        .expect("--ui alias should parse without --url");
+    assert!(ui_alias.desktop);
+
+    let ui_serve = Cli::try_parse_from(["rusty-loader", "--ui-serve", "--gui-port", "0"])
+        .expect("--ui-serve should parse without --url");
+    assert!(ui_serve.ui_serve);
+    assert_eq!(ui_serve.gui_port, 0);
 }

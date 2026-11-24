@@ -31,6 +31,7 @@ pub struct TestController {
     cancel_token: CancellationToken,
     counters: Arc<LiveCounters>,
     telemetry_hub: Option<Arc<TelemetryHub>>,
+    install_signal_handler: bool,
 }
 
 impl TestController {
@@ -42,6 +43,7 @@ impl TestController {
             cancel_token: CancellationToken::new(),
             counters: Arc::new(LiveCounters::new()),
             telemetry_hub: None,
+            install_signal_handler: true,
         }
     }
 
@@ -66,6 +68,13 @@ impl TestController {
     /// Attaches a [`TelemetryHub`] to publish real-time windowed telemetry snapshots.
     pub fn with_telemetry_hub(mut self, hub: Arc<TelemetryHub>) -> Self {
         self.telemetry_hub = Some(hub);
+        self
+    }
+
+    /// Configures whether [`TestController::run`] attaches a process-wide `Ctrl+C` (`SIGINT`)
+    /// listener. Disable this for background UI-driven runs so the host manages shutdown cleanly.
+    pub fn with_signal_handler(mut self, enabled: bool) -> Self {
+        self.install_signal_handler = enabled;
         self
     }
 
@@ -145,10 +154,17 @@ impl TestController {
                 (Vec::new(), Vec::new(), Some(handle))
             };
 
-        // 3. Race benchmark duration against Ctrl+C and external cancellation.
+        // 3. Race benchmark duration against optional Ctrl+C listener and external cancellation.
+        let install_signal_handler = self.install_signal_handler;
         tokio::select! {
             _ = tokio::time::sleep(self.config.duration) => {}
-            _ = signals::wait_for_shutdown_signal(cancel_token.clone()) => {}
+            _ = async {
+                if install_signal_handler {
+                    signals::wait_for_shutdown_signal(cancel_token.clone()).await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            } => {}
             _ = cancel_token.cancelled() => {}
         }
 

@@ -19,7 +19,7 @@ pub struct Cli {
     #[arg(
         short = 'u',
         long = "url",
-        required_unless_present = "changelog",
+        required_unless_present_any = ["changelog", "desktop", "ui_serve"],
         default_value = ""
     )]
     pub url: String,
@@ -27,6 +27,14 @@ pub struct Cli {
     /// Print the embedded CHANGELOG.md release notes and exit
     #[arg(long = "changelog", default_value_t = false)]
     pub changelog: bool,
+
+    /// Launch the interactive macOS desktop UI window
+    #[arg(long = "desktop", visible_alias = "ui", default_value_t = false)]
+    pub desktop: bool,
+
+    /// Start the interactive configuration & telemetry web workbench on loopback
+    #[arg(long = "ui-serve", default_value_t = false)]
+    pub ui_serve: bool,
 
     /// Number of concurrent virtual users / workers
     #[arg(short = 'c', long = "concurrency", default_value_t = 700)]
@@ -101,8 +109,9 @@ pub struct Cli {
 }
 
 /// Supported HTTP methods for load testing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
 #[clap(rename_all = "UPPER")]
+#[serde(rename_all = "UPPERCASE")]
 pub enum HttpMethod {
     Get,
     Post,
@@ -110,6 +119,16 @@ pub enum HttpMethod {
     Delete,
     Patch,
     Head,
+}
+
+impl<'de> Deserialize<'de> for HttpMethod {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        raw.parse::<Self>().map_err(serde::de::Error::custom)
+    }
 }
 
 impl From<HttpMethod> for reqwest::Method {

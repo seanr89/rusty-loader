@@ -156,6 +156,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,
@@ -927,4 +931,372 @@ dialog::backdrop {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+/* Interactive Desktop Workbench Layout & Form Controls */
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+.workspace-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  min-inline-size: 0;
+}
+
+.workspace-layout > .dashboard-main {
+  flex: 1 1 0%;
+  min-inline-size: 0;
+}
+
+.config-sidebar {
+  flex: 0 0 385px;
+  inline-size: 385px;
+  max-inline-size: 100%;
+  position: sticky;
+  inset-block-start: 1rem;
+}
+
+.config-sidebar[hidden],
+.workspace-layout.sidebar-collapsed .config-sidebar {
+  display: none;
+}
+
+.config-panel {
+  gap: 0.9rem;
+}
+
+.btn-primary {
+  background: var(--brand-accent);
+  color: var(--brand-accent-text);
+  border-color: var(--brand-accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-sm {
+  padding: 0.34rem 0.6rem;
+  font-size: 0.78rem;
+  border-radius: 6px;
+}
+
+.btn-icon {
+  padding: 0.4rem 0.6rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.badge-idle {
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.badge-failed {
+  background: var(--badge-err-bg);
+  color: var(--badge-err-fg);
+}
+
+.notice-error {
+  background: var(--badge-err-bg);
+  color: var(--badge-err-fg);
+}
+
+.preset-bar,
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.preset-save-panel,
+.inline-confirm {
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.inline-confirm {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-inline-size: 0;
+}
+
+.field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.field-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.hint {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.control-input {
+  inline-size: 100%;
+  padding: 0.45rem 0.6rem;
+  border-radius: 7px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-family: inherit;
+  line-height: 1.35;
+}
+
+.control-input:focus {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 1px;
+  border-color: var(--brand-accent);
+}
+
+textarea.control-input {
+  resize: vertical;
+  min-block-size: 92px;
+}
+
+.error-msg {
+  display: none;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--badge-err-fg);
+}
+
+.control-input:is(:user-invalid, .user-invalid-fallback) {
+  border-color: var(--danger-bg);
+  background: var(--badge-err-bg);
+}
+
+.control-input:is(:user-invalid, .user-invalid-fallback) + .error-msg,
+.file-picker-row:has(.control-input:is(:user-invalid, .user-invalid-fallback)) ~ .error-msg {
+  display: block;
+}
+
+.target-inputs-row {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+
+.field-method {
+  flex: 0 0 92px;
+}
+
+.field-url {
+  flex: 1 1 auto;
+}
+
+.workload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.headers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.header-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.1fr) auto auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.header-row input[type="checkbox"] {
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin: 0;
+}
+
+.tabs-container {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  overflow: hidden;
+}
+
+.tablist {
+  display: flex;
+  border-block-end: 1px solid var(--border-subtle);
+  background: var(--surface-elevated);
+  overflow-x: auto;
+}
+
+[role="tab"] {
+  position: relative;
+  flex: 1 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0.52rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+[role="tab"][aria-selected="true"] {
+  color: var(--brand-accent);
+}
+
+[role="tab"][aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  border-block-end: 3px solid var(--brand-accent);
+}
+
+.tabpanel {
+  padding: 0.65rem;
+}
+
+.tabpanel[hidden] {
+  display: none;
+}
+
+.tabpanel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.file-picker-row {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.file-picker-row .control-input {
+  flex: 1 1 auto;
+}
+
+.config-submit-bar {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.config-submit-bar .btn-primary {
+  flex: 1 1 auto;
+}
+
+.cli-preview {
+  margin: 0;
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-muted);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-secondary);
+}
+
+.compare-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.compare-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.compare-card .stat-k {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.compare-card .stat-v {
+  font-size: 0.94rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-card .stat-delta {
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.delta-better {
+  color: var(--badge-ok-fg);
+}
+
+.delta-worse {
+  color: var(--badge-err-fg);
+}
+
+.table-history {
+  --label-1: "Cmp";
+  --label-2: "Target / Preset";
+  --label-3: "VUs";
+  --label-4: "Avg RPS";
+  --label-5: "Latency";
+  --label-6: "Error %";
+  --label-7: "Actions";
+}
+
+.history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+@media (max-width: 1040px) {
+  .workspace-layout {
+    flex-direction: column;
+  }
+
+  .config-sidebar {
+    flex: none;
+    inline-size: 100%;
+    position: static;
+    max-block-size: none;
+  }
 }

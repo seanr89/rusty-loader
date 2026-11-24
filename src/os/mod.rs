@@ -1,5 +1,7 @@
 //! OS sanity checks and file descriptor limit inspection.
 
+use serde::{Deserialize, Serialize};
+
 #[cfg(unix)]
 pub mod unix;
 
@@ -7,7 +9,7 @@ pub mod unix;
 pub const RECOMMENDED_MIN_NOFILE: u64 = 4096;
 
 /// Structured representation of the operating system's open file descriptor limits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OsLimits {
     /// Current soft limit (`rlim_cur` on Unix).
     pub soft_limit: u64,
@@ -55,6 +57,22 @@ impl OsLimits {
 /// Queries the current OS file descriptor limits without printing warnings.
 pub fn get_os_limits() -> OsLimits {
     OsLimits::detect()
+}
+
+/// Best-effort attempt to raise the process file descriptor soft limit up to `preferred`.
+///
+/// On Unix/macOS, clamps against the hard limit and falls back cleanly without failing if the OS
+/// rejects higher ceilings. On non-Unix platforms, returns [`OsLimits::detect`].
+pub fn raise_nofile_soft_limit(preferred: u64) -> OsLimits {
+    #[cfg(unix)]
+    {
+        unix::raise_nofile_soft_limit(preferred)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = preferred;
+        OsLimits::detect()
+    }
 }
 
 /// Checks OS file descriptor limits and prints a visible warning to stderr if `soft_limit < 4096`.
@@ -105,5 +123,13 @@ mod tests {
         let limits = check_os_limits();
         assert_eq!(limits.recommended_min, 4096);
         assert!(limits.soft_limit > 0);
+    }
+
+    #[test]
+    fn test_raise_nofile_soft_limit_non_fatal() {
+        let before = get_os_limits();
+        let after = raise_nofile_soft_limit(65_536);
+        assert!(after.soft_limit >= before.soft_limit || after.soft_limit > 0);
+        assert_eq!(after.recommended_min, RECOMMENDED_MIN_NOFILE);
     }
 }

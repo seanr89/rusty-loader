@@ -18,6 +18,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio_util::sync::CancellationToken;
 
 use crate::changelog::{about_payload, changelog_payload, AboutPayload, ChangelogPayload};
+pub use crate::config::{is_sensitive_header, sanitize_url};
 use crate::config::BenchmarkConfig;
 use crate::metrics::snapshot::{TelemetryHub, TelemetryPhase, TelemetrySnapshot};
 use crate::metrics::stats::{BenchmarkStats, LatencyDistribution, LiveCounters};
@@ -39,6 +40,15 @@ pub struct AppState {
     pub started_at: Instant,
 }
 
+/// Operating mode of the embedded GUI server.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuiMode {
+    #[default]
+    Cli,
+    Interactive,
+}
+
 /// Sanitized benchmark metadata returned by `GET /api/meta`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MetaResponse {
@@ -52,6 +62,14 @@ pub struct MetaResponse {
     pub has_body: bool,
     pub body_size_bytes: usize,
     pub phase: TelemetryPhase,
+    #[serde(default)]
+    pub mode: GuiMode,
+    #[serde(default)]
+    pub run_id: Option<String>,
+    #[serde(default)]
+    pub preset_name: Option<String>,
+    #[serde(default)]
+    pub error_message: Option<String>,
 }
 
 /// Builds the Axum [`Router`] for the embedded dashboard UI and telemetry/control endpoints.
@@ -68,25 +86,6 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/stop", post(post_stop))
         .route("/api/export/json", get(export_json))
         .with_state(state)
-}
-
-/// Returns `true` if the HTTP header name likely carries credentials, tokens, or secrets.
-pub fn is_sensitive_header(name: &str) -> bool {
-    let lower = name.to_ascii_lowercase();
-    matches!(
-        lower.as_str(),
-        "authorization"
-            | "proxy-authorization"
-            | "cookie"
-            | "set-cookie"
-            | "x-api-key"
-            | "api-key"
-            | "x-auth-token"
-    ) || lower.contains("token")
-        || lower.contains("secret")
-        || lower.contains("password")
-        || lower.contains("credential")
-        || lower.contains("key")
 }
 
 /// Clones `headers` into a map while replacing sensitive header values with `"[REDACTED]"`.
@@ -107,19 +106,7 @@ pub fn redact_headers(headers: &HeaderMap) -> HashMap<String, String> {
     sanitized
 }
 
-/// Redacts embedded userinfo (`username:password@`) from a URL before exposing it in GUI metadata.
-pub fn sanitize_url(url: &reqwest::Url) -> String {
-    let mut sanitized = url.clone();
-    if !sanitized.username().is_empty() {
-        let _ = sanitized.set_username("REDACTED");
-    }
-    if sanitized.password().is_some() {
-        let _ = sanitized.set_password(Some("REDACTED"));
-    }
-    sanitized.to_string()
-}
-
-async fn serve_index() -> impl IntoResponse {
+pub(crate) async fn serve_index() -> impl IntoResponse {
     (
         [
             (header::CONTENT_TYPE, "text/html; charset=utf-8"),
@@ -129,7 +116,7 @@ async fn serve_index() -> impl IntoResponse {
     )
 }
 
-async fn serve_styles() -> impl IntoResponse {
+pub(crate) async fn serve_styles() -> impl IntoResponse {
     (
         [
             (header::CONTENT_TYPE, "text/css; charset=utf-8"),
@@ -139,7 +126,7 @@ async fn serve_styles() -> impl IntoResponse {
     )
 }
 
-async fn serve_app_js() -> impl IntoResponse {
+pub(crate) async fn serve_app_js() -> impl IntoResponse {
     (
         [
             (
@@ -152,21 +139,44 @@ async fn serve_app_js() -> impl IntoResponse {
     )
 }
 
+/// Constructs a redacted [`MetaResponse`] from a [`BenchmarkConfig`] and runtime metadata.
+pub fn meta_from_config(
+    config: &BenchmarkConfig,
+    phase: TelemetryPhase,
+    mode: GuiMode,
+    run_id: Option<String>,
+    preset_name: Option<String>,
+    error_message: Option<String>,
+) -> MetaResponse {
+    MetaResponse {
+        url: sanitize_url(&config.url),
+        method: config.method.as_str().to_string(),
+        concurrency: config.concurrency,
+        duration_secs: config.duration.as_secs_f64(),
+        ramp_up_secs: config.ramp_up.as_secs_f64(),
+        timeout_ms: config.timeout.as_millis() as u64,
+        headers: redact_headers(&config.headers),
+        has_body: config.body.is_some(),
+        body_size_bytes: config.body_bytes().map(<[u8]>::len).unwrap_or(0),
+        phase,
+        mode,
+        run_id,
+        preset_name,
+        error_message,
+    }
+}
+
 async fn get_meta(State(state): State<AppState>) -> Json<MetaResponse> {
     let phase = state.hub.current_phase(state.started_at.elapsed());
 
-    Json(MetaResponse {
-        url: sanitize_url(&state.config.url),
-        method: state.config.method.as_str().to_string(),
-        concurrency: state.config.concurrency,
-        duration_secs: state.config.duration.as_secs_f64(),
-        ramp_up_secs: state.config.ramp_up.as_secs_f64(),
-        timeout_ms: state.config.timeout.as_millis() as u64,
-        headers: redact_headers(&state.config.headers),
-        has_body: state.config.body.is_some(),
-        body_size_bytes: state.config.body_bytes().map(<[u8]>::len).unwrap_or(0),
+    Json(meta_from_config(
+        &state.config,
         phase,
-    })
+        GuiMode::Cli,
+        None,
+        None,
+        None,
+    ))
 }
 
 async fn get_about() -> Json<AboutPayload> {
@@ -232,7 +242,16 @@ async fn export_json(State(state): State<AppState>) -> Response {
 }
 
 fn build_partial_stats(state: &AppState) -> BenchmarkStats {
-    if let Some(latest) = state.hub.latest_snapshot() {
+    build_partial_stats_from_parts(&state.hub, &state.counters, state.started_at)
+}
+
+/// Builds best-effort partial [`BenchmarkStats`] from a [`TelemetryHub`] and [`LiveCounters`].
+pub fn build_partial_stats_from_parts(
+    hub: &TelemetryHub,
+    counters: &LiveCounters,
+    started_at: Instant,
+) -> BenchmarkStats {
+    if let Some(latest) = hub.latest_snapshot() {
         let lat = &latest.window_latency_ms;
         return BenchmarkStats {
             total_duration_secs: latest.elapsed_secs,
@@ -265,18 +284,18 @@ fn build_partial_stats(state: &AppState) -> BenchmarkStats {
         };
     }
 
-    let elapsed = state.started_at.elapsed().as_secs_f64();
-    let total_requests = state.counters.total_requests();
-    let total_bytes = state.counters.total_bytes();
+    let elapsed = started_at.elapsed().as_secs_f64();
+    let total_requests = counters.total_requests();
+    let total_bytes = counters.total_bytes();
 
     BenchmarkStats {
         total_duration_secs: elapsed,
         total_requests,
-        successful_requests: state.counters.successful_requests(),
-        client_errors: state.counters.client_errors(),
-        server_errors: state.counters.server_errors(),
-        other_statuses: state.counters.other_statuses(),
-        transport_errors: state.counters.transport_errors(),
+        successful_requests: counters.successful_requests(),
+        client_errors: counters.client_errors(),
+        server_errors: counters.server_errors(),
+        other_statuses: counters.other_statuses(),
+        transport_errors: counters.transport_errors(),
         requests_per_sec: if elapsed > 0.0 {
             total_requests as f64 / elapsed
         } else {

@@ -64,10 +64,12 @@ High-performance, concurrent command-line HTTP/REST API load testing tool writte
 | **CLI** | `src/cli.rs` | `clap` derive parser, HTTP method enum, `--changelog` flag, human-friendly duration/timeout/header parsers |
 | **Config** | `src/config.rs` | Validated `BenchmarkConfig` builder, URL/scheme checks, and `@file` body payload resolution |
 | **Client** | `src/client.rs` | `HttpClientFactory` tuning `reqwest::Client` connection pools and TCP socket options |
-| **OS** | `src/os/` | Non-blocking `libc::getrlimit(RLIMIT_NOFILE)` inspection and `ulimit -n` warnings |
+| **OS** | `src/os/` | Non-blocking `libc::getrlimit(RLIMIT_NOFILE)` inspection, soft-limit auto-raise, and `ulimit -n` warnings |
+| **Presets** | `src/presets.rs` | Local saved preset & recent configuration store (`presets.json` with `0600` permissions) and CLI formatter |
 | **Engine** | `src/engine/` | `TestController`, staggered worker spawner, `Worker` execution loop, and `SIGINT` handler |
 | **Metrics** | `src/metrics/` | `MetricEvent`, lockless `LiveCounters`, `LatencyHistogram`, `TelemetryHub`, and `MetricsCollector` |
-| **GUI** | `src/gui/` | Feature-gated (`gui`) embedded `axum` web dashboard, SSE stream, REST control API, and offline SPA assets |
+| **GUI** | `src/gui/` | Feature-gated (`gui`) embedded `axum` monitoring dashboard, multi-run `RunManager`, session-auth REST/SSE API, and offline SPA assets |
+| **Desktop** | `src/desktop/` | Feature-gated (`desktop`, macOS) native `tao`/`wry` `WKWebView` window, `muda` menus, and `rfd` file dialogs |
 | **Reporter** | `src/reporter/` | `indicatif` live progress bar, `comfy-table` terminal tables, and `serde_json` file exporter |
 
 ---
@@ -128,7 +130,7 @@ make macos-update APP_DIR=~/Applications
   make macos-install CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
   ```
 - When launching a locally built, ad-hoc signed `.app` from Finder or Spotlight for the first time, macOS Gatekeeper may block or warn about an unidentified developer. You can allow it under **System Settings → Privacy & Security → Open Anyway** (or right-click / Control-click the app in Finder and choose **Open**).
-- Launching `rusty-loader.app` from Finder or Spotlight opens a macOS Terminal window with `rusty-loader` added to `PATH` and prints `--version` and `--help`. Invoking the bundle entrypoint directly from a shell with CLI flags forwards all arguments transparently to the binary.
+- Launching `rusty-loader.app` from Finder, Spotlight, or Dock opens the **native macOS desktop UI** directly (`rusty-loader --desktop`) with interactive benchmark configuration, saved presets, live telemetry charting, run comparison, and native file open/save dialogs. Invoking the bundle entrypoint (`Contents/MacOS/rusty-loader-launcher`) from a shell with CLI flags forwards all arguments transparently to the binary.
 
 ---
 
@@ -149,6 +151,8 @@ Usage: rusty-loader [OPTIONS] --url <URL>
 | `-t` | `--timeout <TIMEOUT>` | `5000ms` | Per-request timeout (`100ms`, `5s`, or raw milliseconds `2000`) |
 | | `--ramp-up <DURATION>` | `0s` | Ramp-up time to linearly spawn workers up to `--concurrency` (`10s`, `1m`, or raw seconds) |
 | | `--output-json <PATH>` | `None` | Optional file path to export the full JSON benchmark report |
+| | `--desktop` (`--ui`) | `false` | Launch the interactive macOS desktop UI window without requiring `--url` |
+| | `--ui-serve` | `false` | Start the interactive configuration & telemetry web workbench on loopback |
 | | `--gui` | `false` | Enable the embedded real-time web monitoring dashboard |
 | | `--gui-port <PORT>` | `8080` | Port to bind the embedded GUI server (`0` assigns an ephemeral OS port) |
 | | `--gui-bind <ADDR>` | `127.0.0.1` | IP address to bind the embedded GUI server (loopback-only by default) |
@@ -224,6 +228,31 @@ rusty-loader \
 
 ---
 
+## macOS Desktop UI & Interactive Workbench (`--desktop` / `--ui-serve`)
+
+Launch the interactive desktop application directly from `rusty-loader.app` or from the terminal without specifying `--url` upfront:
+
+```bash
+# Open the native macOS desktop window (WKWebView + native menus & file dialogs)
+rusty-loader --desktop
+
+# Pre-populate the desktop form from CLI flags
+rusty-loader --desktop --url "https://api.example.com/v1/ping" --concurrency 700 --duration 30s
+
+# Launch the interactive configuration workbench in your default browser (macOS or Linux)
+rusty-loader --ui-serve --gui-open
+```
+
+- **Configuration Builder & Presets:** Configure target URL, HTTP method, concurrency, duration, ramp-up, timeout, repeatable headers (with masked sensitive values), and inline/file payloads via a native macOS file picker. Save and select reusable presets or recent runs stored with `0600` permissions at `~/Library/Application Support/rusty-loader/presets.json` (overridable via `RUSTY_LOADER_CONFIG_DIR`).
+- **Multi-Run Telemetry & Comparison:** Start and gracefully stop sequential runs (`Cmd+Enter` / `Cmd+.`) while streaming real-time KPIs, Canvas 2D charts (throughput/VUs, windowed HDR latency percentiles, status/error classes), cumulative HDR summaries, native JSON report saving, and two-run delta comparisons.
+- **Security:** Interactive endpoints require a per-session random token (`X-RL-Session` header / `HttpOnly` cookie), bind to loopback by default, and redact sensitive headers and URL credentials in run history and exports.
+- **Build Feature Flags:**
+  - Default (`gui` + `desktop` on macOS): `cargo build --release`
+  - Web-only GUI without native desktop host: `cargo build --release --no-default-features --features gui`
+  - Headless CLI-only binary: `cargo build --release --no-default-features`
+
+---
+
 ## Real-Time GUI Monitoring Dashboard (`--gui`)
 
 Enable the embedded web dashboard with `--gui` to monitor live throughput, active virtual users, windowed HDR latency percentiles (`p50`, `p90`, `p95`, `p99`, `max`), HTTP status distributions, and categorized transport errors from any modern browser—without external runtime or CDN dependencies.
@@ -242,7 +271,7 @@ rusty-loader \
 - `--gui-port 0` lets the OS pick an unused port and prints the active URL on startup.
 - `--gui-keep-alive` keeps the dashboard available after the test finishes (until `Ctrl+C`) so you can inspect final charts and download the JSON report.
 - Sensitive request headers (`Authorization`, `Cookie`, `X-Api-Key`, tokens/secrets) and URL credentials are automatically redacted (`[REDACTED]`) in GUI responses.
-- Build without the embedded GUI server at any time using `cargo build --release --no-default-features`.
+- Build without the embedded GUI/desktop features at any time using `cargo build --release --no-default-features`.
 
 ### Remote Load Generators via SSH Port-Forwarding
 For headless Linux load generators, keep `--gui-bind 127.0.0.1` (default) and tunnel the dashboard over SSH:
