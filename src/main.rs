@@ -3,26 +3,145 @@ use std::sync::Arc;
 #[cfg(feature = "gui")]
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use rusty_loader::changelog::full_changelog;
-use rusty_loader::cli::Cli;
-use rusty_loader::config::{BenchmarkConfig, GuiConfig};
+use rusty_loader::cli::{parse_header, Cli};
+use rusty_loader::config::{BenchmarkConfig, BenchmarkConfigInput, BodyMode, GuiConfig, HeaderEntry};
 use rusty_loader::engine::TestController;
 #[cfg(feature = "gui")]
-use rusty_loader::gui::{open_browser_url, start_gui_server};
+use rusty_loader::gui::{open_browser_url, start_gui_server, start_interactive_gui_server, RunManager};
 #[cfg(feature = "gui")]
 use rusty_loader::metrics::TelemetryHub;
 use rusty_loader::os::check_and_warn_os_limits;
+#[cfg(feature = "gui")]
+use rusty_loader::os::raise_nofile_soft_limit;
+#[cfg(feature = "gui")]
+use rusty_loader::presets::PresetStore;
 use rusty_loader::reporter::{report_results, spawn_live_progress_bar};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
     if cli.changelog {
         print!("{}", full_changelog());
         return Ok(());
     }
+
+    if cli.desktop {
+        let initial = initial_input_from_cli(&cli);
+        #[cfg(all(feature = "desktop", target_os = "macos"))]
+        {
+            return rusty_loader::desktop::run_desktop_app(initial);
+        }
+        #[cfg(not(all(feature = "desktop", target_os = "macos")))]
+        {
+            let _ = initial;
+            anyhow::bail!(
+                "--desktop is only supported on macOS with the 'desktop' feature enabled; use --ui-serve to open the interactive web UI in a browser"
+            );
+        }
+    }
+
+    if cli.ui_serve {
+        #[cfg(not(feature = "gui"))]
+        anyhow::bail!("--ui-serve requested, but this binary was compiled without the 'gui' feature");
+
+        #[cfg(feature = "gui")]
+        {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .context("failed to initialize Tokio runtime")?;
+            return rt.block_on(run_ui_serve(cli));
+        }
+    }
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("failed to initialize Tokio runtime")?;
+    rt.block_on(run_cli_benchmark(cli))
+}
+
+fn initial_input_from_cli(cli: &Cli) -> Option<BenchmarkConfigInput> {
+    if cli.url.trim().is_empty() {
+        return None;
+    }
+
+    let headers = cli
+        .headers
+        .iter()
+        .filter_map(|raw| {
+            parse_header(raw).ok().map(|(name, value)| HeaderEntry {
+                name: name.as_str().to_string(),
+                value: value.to_str().unwrap_or("").to_string(),
+                enabled: true,
+            })
+        })
+        .collect();
+
+    let (body_mode, body, body_file) = match cli.body.as_deref() {
+        Some(raw) if raw.starts_with('@') => {
+            let p = raw.trim_start_matches('@').trim();
+            if p.is_empty() {
+                (BodyMode::None, None, None)
+            } else {
+                (BodyMode::File, None, Some(p.into()))
+            }
+        }
+        Some(raw) if !raw.is_empty() => (BodyMode::Raw, Some(raw.to_string()), None),
+        _ => (BodyMode::None, None, None),
+    };
+
+    Some(BenchmarkConfigInput {
+        url: cli.url.clone(),
+        method: cli.method,
+        concurrency: cli.concurrency,
+        duration: format!("{}ms", cli.duration.as_millis()),
+        ramp_up: format!("{}ms", cli.ramp_up.as_millis()),
+        timeout: format!("{}ms", cli.timeout.as_millis()),
+        headers,
+        body_mode,
+        body,
+        body_file,
+        output_json: cli.output_json.clone(),
+    })
+}
+
+#[cfg(feature = "gui")]
+async fn run_ui_serve(cli: Cli) -> Result<()> {
+    let gui_config = GuiConfig::from_cli(&cli)?;
+    let _ = raise_nofile_soft_limit(65_536);
+    check_and_warn_os_limits();
+
+    let initial = initial_input_from_cli(&cli);
+    let manager = Arc::new(RunManager::new());
+    let presets = Arc::new(PresetStore::load_default()?);
+
+    let handle = start_interactive_gui_server(
+        gui_config.socket_addr(),
+        Arc::clone(&manager),
+        presets,
+        None,
+        initial,
+    )
+    .await?;
+
+    let tokenized_url = handle.tokenized_url();
+    eprintln!("Interactive UI workbench listening at {tokenized_url}");
+    eprintln!("Press Ctrl+C to shut down.");
+
+    if cli.gui_open {
+        open_browser_url(&tokenized_url);
+    }
+
+    let _ = tokio::signal::ctrl_c().await;
+    manager.shutdown().await;
+    handle.shutdown().await;
+    Ok(())
+}
+
+async fn run_cli_benchmark(cli: Cli) -> Result<()> {
     let gui_config = GuiConfig::from_cli(&cli)?;
     let config = BenchmarkConfig::from_cli(cli)?;
 

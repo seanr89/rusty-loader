@@ -201,6 +201,14 @@ cmd_bundle() {
       -e "s/{{EXECUTABLE}}/${esc_executable}/g" \
     "$PLIST_TEMPLATE" > "${contents_dir}/Info.plist"
 
+  local icon_src="${ROOT_DIR}/packaging/macos/${APP_NAME}.icns"
+  if [[ -f "$icon_src" ]]; then
+    mkdir -p "${contents_dir}/Resources"
+    cp "$icon_src" "${contents_dir}/Resources/${APP_NAME}.icns"
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string ${APP_NAME}.icns" "${contents_dir}/Info.plist" >/dev/null 2>&1 || \
+      /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile ${APP_NAME}.icns" "${contents_dir}/Info.plist" >/dev/null
+  fi
+
   plutil -lint "${contents_dir}/Info.plist" >/dev/null
   echo "Packaged macOS app bundle: ${BUNDLE_APP_PATH} (v${VERSION})"
 }

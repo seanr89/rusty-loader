@@ -10,10 +10,15 @@ use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::{BenchmarkConfig, GuiConfig};
+use crate::config::{BenchmarkConfig, BenchmarkConfigInput, GuiConfig};
 use crate::gui::api::{build_router, AppState};
+use crate::gui::interactive::{
+    build_interactive_router, generate_session_token, DialogDispatcher, InteractiveState,
+};
+use crate::gui::manager::RunManager;
 use crate::metrics::snapshot::TelemetryHub;
 use crate::metrics::stats::LiveCounters;
+use crate::presets::PresetStore;
 
 const SERVER_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
 
@@ -90,6 +95,91 @@ pub async fn start_gui_server(
 
     Ok(GuiServerHandle {
         local_addr,
+        shutdown_token,
+        join_handle,
+    })
+}
+
+/// Handle to a running interactive desktop/web UI server.
+pub struct InteractiveServerHandle {
+    local_addr: SocketAddr,
+    session_token: String,
+    shutdown_token: CancellationToken,
+    join_handle: JoinHandle<()>,
+}
+
+impl InteractiveServerHandle {
+    /// Returns the bound [`SocketAddr`] of the interactive HTTP server.
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
+
+    /// Returns the clean loopback HTTP URL (e.g. `http://127.0.0.1:54321`).
+    pub fn url(&self) -> String {
+        format!("http://{}", self.local_addr)
+    }
+
+    /// Returns the session-authenticated bootstrap URL (`http://127.0.0.1:<port>/?token=...`).
+    pub fn tokenized_url(&self) -> String {
+        format!("http://{}/?token={}", self.local_addr, self.session_token)
+    }
+
+    /// Returns the per-session authentication token required for mutating API endpoints.
+    pub fn session_token(&self) -> &str {
+        &self.session_token
+    }
+
+    /// Gracefully shuts down the embedded interactive HTTP server.
+    pub async fn shutdown(self) {
+        self.shutdown_token.cancel();
+        let mut join_handle = self.join_handle;
+        if tokio::time::timeout(SERVER_SHUTDOWN_TIMEOUT, &mut join_handle)
+            .await
+            .is_err()
+        {
+            join_handle.abort();
+            let _ = join_handle.await;
+        }
+    }
+}
+
+/// Starts the interactive loopback HTTP/SSE server backing the macOS desktop UI and `--ui-serve`.
+pub async fn start_interactive_gui_server(
+    bind_addr: SocketAddr,
+    manager: Arc<RunManager>,
+    presets: Arc<PresetStore>,
+    dialog_dispatcher: Option<DialogDispatcher>,
+    initial_config: Option<BenchmarkConfigInput>,
+) -> Result<InteractiveServerHandle> {
+    let listener = TcpListener::bind(bind_addr)
+        .await
+        .with_context(|| format!("failed to bind interactive GUI server to {bind_addr}"))?;
+    let local_addr = listener
+        .local_addr()
+        .context("failed to read local socket address for interactive GUI server")?;
+
+    let session_token = generate_session_token()?;
+    let state = InteractiveState {
+        manager,
+        presets,
+        session_token: Arc::new(session_token.clone()),
+        dialog_dispatcher,
+        initial_config,
+    };
+    let router = build_interactive_router(state);
+
+    let shutdown_token = CancellationToken::new();
+    let server_shutdown = shutdown_token.clone();
+
+    let join_handle = tokio::spawn(async move {
+        let _ = axum::serve(listener, router)
+            .with_graceful_shutdown(server_shutdown.cancelled_owned())
+            .await;
+    });
+
+    Ok(InteractiveServerHandle {
+        local_addr,
+        session_token,
         shutdown_token,
         join_handle,
     })

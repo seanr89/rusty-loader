@@ -9,18 +9,24 @@
     document.querySelector('meta[name="color-scheme"]').content = localStorage.getItem("color-scheme") ?? "light dark";
   } catch (_) {}
   </script>
-  <title>rusty-loader — Live Telemetry Dashboard</title>
+  <title>rusty-loader — Live Telemetry &amp; Load Workbench</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
+  <div id="form-live-announcer" aria-live="polite" class="visually-hidden"></div>
+
   <div class="app-shell">
     <header class="topbar">
       <div class="topbar-brand">
+        <button id="toggle-sidebar-btn" type="button" class="btn btn-secondary btn-icon" hidden aria-expanded="true" aria-controls="config-sidebar" title="Toggle configuration sidebar">
+          &#9776;
+        </button>
         <div class="brand-mark" aria-hidden="true">RL</div>
         <div class="brand-info">
           <div class="brand-title-row">
             <h1>rusty-loader</h1>
-            <span id="app-version-pill" class="version-pill">v0.1.0</span>
+            <span id="app-version-pill" class="version-pill">v0.2.0</span>
             <span id="phase-badge" class="badge badge-running" role="status" aria-live="polite">Connecting</span>
           </div>
           <div class="target-row">
@@ -43,6 +49,9 @@
         </div>
 
         <div class="button-group">
+          <button id="return-live-btn" type="button" class="btn btn-secondary" hidden>
+            Return to Live
+          </button>
           <button id="pause-charts-btn" type="button" class="btn btn-secondary" aria-pressed="false">
             Pause Charts
           </button>
@@ -67,192 +76,413 @@
 
     <div id="connection-banner" class="notice-banner" hidden role="status" aria-live="polite"></div>
 
-    <main class="dashboard-main">
-      <section class="kpi-grid" aria-label="Key Performance Indicators">
-        <article class="kpi-card">
-          <header class="kpi-label">Live Throughput</header>
-          <div class="kpi-value" id="kpi-window-rps">0.0 req/s</div>
-          <footer class="kpi-sub" id="kpi-avg-rps">Avg: 0.0 req/s</footer>
-        </article>
-
-        <article class="kpi-card">
-          <header class="kpi-label">Active Virtual Users</header>
-          <div class="kpi-value" id="kpi-active-vus">0 / 0</div>
-          <footer class="kpi-sub" id="kpi-ramp-up">Ramp-up: 0s</footer>
-        </article>
-
-        <article class="kpi-card">
-          <header class="kpi-label">Total Requests</header>
-          <div class="kpi-value" id="kpi-total-reqs">0</div>
-          <footer class="kpi-sub" id="kpi-total-bytes">Transferred: 0 B</footer>
-        </article>
-
-        <article class="kpi-card">
-          <header class="kpi-label">Success / Error Rate</header>
-          <div class="kpi-value" id="kpi-success-rate">100.00%</div>
-          <footer class="kpi-sub" id="kpi-error-rate">Errors: 0 (0.00%)</footer>
-        </article>
-
-        <article class="kpi-card">
-          <header class="kpi-label">Window Latency (p50 / p95 / p99)</header>
-          <div class="kpi-value kpi-value-compact" id="kpi-latency-summary">0.00 / 0.00 / 0.00 ms</div>
-          <footer class="kpi-sub" id="kpi-latency-max">Window Max: 0.00 ms</footer>
-        </article>
-
-        <article class="kpi-card">
-          <header class="kpi-label">Transfer Rate</header>
-          <div class="kpi-value" id="kpi-transfer-rate">0.00 B/s</div>
-          <footer class="kpi-sub" id="kpi-timeout">Timeout: -- ms</footer>
-        </article>
-      </section>
-
-      <section id="final-summary-panel" class="panel summary-panel" hidden aria-labelledby="final-summary-heading">
-        <div class="panel-header">
-          <h2 id="final-summary-heading">Final Cumulative Benchmark Summary (HDR Histogram)</h2>
-          <span class="panel-meta" id="final-duration-meta">--</span>
-        </div>
-        <div class="summary-stats-strip" id="final-summary-grid"></div>
-      </section>
-
-      <section class="charts-grid" aria-label="Real-Time Time-Series Charts">
-        <article class="panel chart-panel chart-panel-wide">
+    <div class="workspace-layout" id="workspace-layout">
+      <aside id="config-sidebar" class="config-sidebar" hidden aria-label="Load Test Configuration">
+        <section class="panel config-panel">
           <div class="panel-header">
             <div>
-              <h2>Throughput &amp; Concurrency</h2>
-              <p class="panel-subtitle">Windowed RPS, Cumulative Avg RPS, and Active VUs</p>
+              <h2>Configuration</h2>
+              <p class="panel-subtitle">Select a preset or configure a new run</p>
             </div>
-            <div class="chart-legend" aria-label="Throughput chart legend">
-              <span class="legend-item"><i class="swatch swatch-rps"></i>Window RPS</span>
-              <span class="legend-item"><i class="swatch swatch-avg"></i>Avg RPS</span>
-              <span class="legend-item"><i class="swatch swatch-vus"></i>Active VUs</span>
-            </div>
+            <span id="preset-dirty-pill" class="badge badge-ramping" hidden>Modified</span>
           </div>
-          <div class="canvas-wrap">
-            <canvas id="chart-throughput" aria-label="Throughput and Concurrency over time"></canvas>
-            <div class="chart-tooltip" id="tooltip-throughput" hidden></div>
-          </div>
-        </article>
 
-        <article class="panel chart-panel">
+          <div class="preset-bar">
+            <div class="field">
+              <label for="preset-select">Saved Presets &amp; Recent Runs</label>
+              <select id="preset-select" class="control-input">
+                <option value="">-- Custom / Unsaved Configuration --</option>
+              </select>
+            </div>
+            <div class="preset-actions">
+              <button id="preset-new-btn" type="button" class="btn btn-secondary btn-sm">New</button>
+              <button id="preset-save-btn" type="button" class="btn btn-secondary btn-sm">Save</button>
+              <button id="preset-save-as-btn" type="button" class="btn btn-secondary btn-sm">Save As</button>
+              <button id="preset-delete-btn" type="button" class="btn btn-secondary btn-sm" disabled>Delete</button>
+            </div>
+            <div id="preset-delete-confirm" class="inline-confirm" hidden>
+              <span>Delete selected preset?</span>
+              <div class="button-group">
+                <button id="preset-delete-confirm-btn" type="button" class="btn btn-danger btn-sm">Confirm</button>
+                <button id="preset-delete-cancel-btn" type="button" class="btn btn-secondary btn-sm">Cancel</button>
+              </div>
+            </div>
+            <div id="preset-save-panel" class="preset-save-panel" hidden>
+              <div class="field">
+                <label for="preset-name-input">Preset Name</label>
+                <input id="preset-name-input" type="text" class="control-input" placeholder="e.g. Prod Health Ping 700 VUs" data-error="err-preset-name">
+                <div id="err-preset-name" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Enter a name for this preset.
+                </div>
+              </div>
+              <div class="field">
+                <label for="preset-desc-input">Notes (optional)</label>
+                <input id="preset-desc-input" type="text" class="control-input" placeholder="Target SLA or environment notes">
+              </div>
+              <div class="button-group">
+                <button id="preset-commit-btn" type="button" class="btn btn-primary btn-sm">Save Preset</button>
+                <button id="preset-cancel-btn" type="button" class="btn btn-secondary btn-sm">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <form id="config-form" class="config-form" novalidate>
+            <div class="target-inputs-row">
+              <div class="field field-method">
+                <label for="cfg-method">Method</label>
+                <span class="hint" aria-hidden="true">&nbsp;</span>
+                <select id="cfg-method" name="method" class="control-input">
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="DELETE">DELETE</option>
+                  <option value="PATCH">PATCH</option>
+                  <option value="HEAD">HEAD</option>
+                </select>
+              </div>
+              <div class="field field-url">
+                <label for="cfg-url">Target URL</label>
+                <span id="hint-cfg-url" class="hint">Include scheme and host (HTTP or HTTPS)</span>
+                <input id="cfg-url" name="url" type="url" required class="control-input" placeholder="api.example.com/v1/ping" aria-describedby="hint-cfg-url" data-error="err-cfg-url">
+                <div id="err-cfg-url" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Enter a valid HTTP or HTTPS URL.
+                </div>
+              </div>
+            </div>
+
+            <div class="workload-grid">
+              <div class="field">
+                <label for="cfg-concurrency">Concurrency (VUs)</label>
+                <span id="hint-cfg-concurrency" class="hint">Parallel workers (&ge; 1)</span>
+                <input id="cfg-concurrency" name="concurrency" type="number" min="1" step="1" required value="700" class="control-input" aria-describedby="hint-cfg-concurrency" data-error="err-cfg-concurrency">
+                <div id="err-cfg-concurrency" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Concurrency must be at least 1.
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="cfg-duration">Duration</label>
+                <span id="hint-cfg-duration" class="hint">e.g. 30s, 2m, 500ms</span>
+                <input id="cfg-duration" name="duration" type="text" required pattern="^\s*\d+\s*(ms|s|m|h)?\s*$" value="30s" class="control-input mono" aria-describedby="hint-cfg-duration" data-error="err-cfg-duration">
+                <div id="err-cfg-duration" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Use a positive integer with unit (ms, s, m, h).
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="cfg-ramp-up">Ramp-Up</label>
+                <span id="hint-cfg-ramp-up" class="hint">e.g. 0s, 10s (&le; duration)</span>
+                <input id="cfg-ramp-up" name="ramp_up" type="text" required pattern="^\s*\d+\s*(ms|s|m|h)?\s*$" value="0s" class="control-input mono" aria-describedby="hint-cfg-ramp-up" data-error="err-cfg-ramp-up">
+                <div id="err-cfg-ramp-up" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Use a non-negative duration &le; total duration.
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="cfg-timeout">Request Timeout</label>
+                <span id="hint-cfg-timeout" class="hint">e.g. 5000ms, 5s</span>
+                <input id="cfg-timeout" name="timeout" type="text" required pattern="^\s*\d+\s*(ms|s|m|h)?\s*$" value="5000ms" class="control-input mono" aria-describedby="hint-cfg-timeout" data-error="err-cfg-timeout">
+                <div id="err-cfg-timeout" class="error-msg">
+                  <span role="img" aria-label="Error">!</span> Use a positive timeout (ms, s, m, h).
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="field-header-row">
+                <label>Request Headers</label>
+                <button id="add-header-btn" type="button" class="btn btn-secondary btn-sm">+ Add Header</button>
+              </div>
+              <div id="headers-list" class="headers-list"></div>
+            </div>
+
+            <div class="field">
+              <label>Request Body</label>
+              <div class="tabs-container">
+                <div role="tablist" aria-label="Request Body Mode" class="tablist">
+                  <button type="button" role="tab" id="tab-body-none" aria-selected="true" data-body-mode="none" tabindex="0">None</button>
+                  <button type="button" role="tab" id="tab-body-raw" aria-selected="false" data-body-mode="raw" tabindex="-1">Raw / JSON</button>
+                  <button type="button" role="tab" id="tab-body-file" aria-selected="false" data-body-mode="file" tabindex="-1">From File</button>
+                </div>
+
+                <div id="body-panel-none" role="tabpanel" aria-labelledby="tab-body-none" class="tabpanel" tabindex="0">
+                  <p class="panel-subtitle">No HTTP request body will be sent.</p>
+                </div>
+
+                <div id="body-panel-raw" role="tabpanel" aria-labelledby="tab-body-raw" class="tabpanel" hidden>
+                  <div class="tabpanel-inner">
+                    <div class="field-header-row">
+                      <span id="body-raw-bytes" class="panel-subtitle">0 B</span>
+                      <button id="format-json-btn" type="button" class="btn btn-secondary btn-sm">Format JSON</button>
+                    </div>
+                    <textarea id="cfg-body-raw" rows="5" class="control-input mono" placeholder='{"query":"active_records","limit":50}'></textarea>
+                  </div>
+                </div>
+
+                <div id="body-panel-file" role="tabpanel" aria-labelledby="tab-body-file" class="tabpanel" hidden>
+                  <div class="tabpanel-inner">
+                    <span id="hint-cfg-body-file" class="hint">Select or enter path to payload file</span>
+                    <div class="file-picker-row">
+                      <input id="cfg-body-file" type="text" class="control-input mono" placeholder="/path/to/payload.json" aria-describedby="hint-cfg-body-file" data-error="err-cfg-body-file">
+                      <button id="choose-body-file-btn" type="button" class="btn btn-secondary btn-sm">Choose File&hellip;</button>
+                    </div>
+                    <div id="body-file-meta" class="panel-subtitle"></div>
+                    <div id="err-cfg-body-file" class="error-msg">
+                      <span role="img" aria-label="Error">!</span> Select a readable payload file.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="cfg-output-json">Auto-Export JSON Path (optional)</label>
+              <input id="cfg-output-json" type="text" class="control-input mono" placeholder="e.g. artifacts/report.json">
+            </div>
+
+            <div id="config-os-warning" class="notice-banner" hidden role="status"></div>
+            <div id="config-form-error" class="notice-banner notice-error" hidden role="alert"></div>
+
+            <div class="config-submit-bar">
+              <button id="start-run-btn" type="submit" class="btn btn-primary">
+                Start Load Test
+              </button>
+              <button id="copy-cli-btn" type="button" class="btn btn-secondary">
+                Copy CLI
+              </button>
+            </div>
+            <pre id="cli-preview-box" class="cli-preview mono" hidden></pre>
+          </form>
+        </section>
+      </aside>
+
+      <main class="dashboard-main">
+        <section class="kpi-grid" aria-label="Key Performance Indicators">
+          <article class="kpi-card">
+            <header class="kpi-label">Live Throughput</header>
+            <div class="kpi-value" id="kpi-window-rps">0.0 req/s</div>
+            <footer class="kpi-sub" id="kpi-avg-rps">Avg: 0.0 req/s</footer>
+          </article>
+
+          <article class="kpi-card">
+            <header class="kpi-label">Active Virtual Users</header>
+            <div class="kpi-value" id="kpi-active-vus">0 / 0</div>
+            <footer class="kpi-sub" id="kpi-ramp-up">Ramp-up: 0s</footer>
+          </article>
+
+          <article class="kpi-card">
+            <header class="kpi-label">Total Requests</header>
+            <div class="kpi-value" id="kpi-total-reqs">0</div>
+            <footer class="kpi-sub" id="kpi-total-bytes">Transferred: 0 B</footer>
+          </article>
+
+          <article class="kpi-card">
+            <header class="kpi-label">Success / Error Rate</header>
+            <div class="kpi-value" id="kpi-success-rate">100.00%</div>
+            <footer class="kpi-sub" id="kpi-error-rate">Errors: 0 (0.00%)</footer>
+          </article>
+
+          <article class="kpi-card">
+            <header class="kpi-label">Window Latency (p50 / p95 / p99)</header>
+            <div class="kpi-value kpi-value-compact" id="kpi-latency-summary">0.00 / 0.00 / 0.00 ms</div>
+            <footer class="kpi-sub" id="kpi-latency-max">Window Max: 0.00 ms</footer>
+          </article>
+
+          <article class="kpi-card">
+            <header class="kpi-label">Transfer Rate</header>
+            <div class="kpi-value" id="kpi-transfer-rate">0.00 B/s</div>
+            <footer class="kpi-sub" id="kpi-timeout">Timeout: -- ms</footer>
+          </article>
+        </section>
+
+        <section id="final-summary-panel" class="panel summary-panel" hidden aria-labelledby="final-summary-heading">
+          <div class="panel-header">
+            <h2 id="final-summary-heading">Final Cumulative Benchmark Summary (HDR Histogram)</h2>
+            <span class="panel-meta" id="final-duration-meta">--</span>
+          </div>
+          <div class="summary-stats-strip" id="final-summary-grid"></div>
+        </section>
+
+        <section class="charts-grid" aria-label="Real-Time Time-Series Charts">
+          <article class="panel chart-panel chart-panel-wide">
+            <div class="panel-header">
+              <div>
+                <h2>Throughput &amp; Concurrency</h2>
+                <p class="panel-subtitle">Windowed RPS, Cumulative Avg RPS, and Active VUs</p>
+              </div>
+              <div class="chart-legend" aria-label="Throughput chart legend">
+                <span class="legend-item"><i class="swatch swatch-rps"></i>Window RPS</span>
+                <span class="legend-item"><i class="swatch swatch-avg"></i>Avg RPS</span>
+                <span class="legend-item"><i class="swatch swatch-vus"></i>Active VUs</span>
+              </div>
+            </div>
+            <div class="canvas-wrap">
+              <canvas id="chart-throughput" aria-label="Throughput and Concurrency over time"></canvas>
+              <div class="chart-tooltip" id="tooltip-throughput" hidden></div>
+            </div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Windowed Latency Percentiles (ms)</h2>
+                <p class="panel-subtitle">Per-interval HDR histogram distribution</p>
+              </div>
+              <div class="chart-legend" aria-label="Latency chart legend">
+                <span class="legend-item"><i class="swatch swatch-p50"></i>p50</span>
+                <span class="legend-item"><i class="swatch swatch-p90"></i>p90</span>
+                <span class="legend-item"><i class="swatch swatch-p95"></i>p95</span>
+                <span class="legend-item"><i class="swatch swatch-p99"></i>p99</span>
+                <span class="legend-item"><i class="swatch swatch-max"></i>max</span>
+              </div>
+            </div>
+            <div class="canvas-wrap">
+              <canvas id="chart-latency" aria-label="Windowed latency percentiles over time"></canvas>
+              <div class="chart-tooltip" id="tooltip-latency" hidden></div>
+            </div>
+          </article>
+
+          <article class="panel chart-panel">
+            <div class="panel-header">
+              <div>
+                <h2>Responses &amp; Errors by Class</h2>
+                <p class="panel-subtitle">Requests per tick by HTTP class &amp; transport errors</p>
+              </div>
+              <div class="chart-legend" aria-label="Status class chart legend">
+                <span class="legend-item"><i class="swatch swatch-2xx"></i>2xx</span>
+                <span class="legend-item"><i class="swatch swatch-4xx"></i>4xx</span>
+                <span class="legend-item"><i class="swatch swatch-5xx"></i>5xx</span>
+                <span class="legend-item"><i class="swatch swatch-net"></i>Transport</span>
+              </div>
+            </div>
+            <div class="canvas-wrap">
+              <canvas id="chart-errors" aria-label="Responses and errors by class over time"></canvas>
+              <div class="chart-tooltip" id="tooltip-errors" hidden></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="tables-grid" aria-label="Distribution and Configuration Breakdowns">
+          <article class="panel">
+            <div class="panel-header">
+              <h2 id="status-table-caption">HTTP Status Code Breakdown</h2>
+              <span class="panel-meta" id="status-total-meta">0 codes</span>
+            </div>
+            <div tabindex="0" role="region" aria-labelledby="status-table-caption" class="table-wrapper">
+              <table class="data-table table-status">
+                <caption class="sr-only">HTTP Status Code Breakdown</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Status Code</th>
+                    <th scope="col">Reason</th>
+                    <th scope="col">Count</th>
+                    <th scope="col">Share</th>
+                  </tr>
+                </thead>
+                <tbody id="status-table-body">
+                  <tr>
+                    <th scope="row">--</th>
+                    <td>Waiting for responses</td>
+                    <td>0</td>
+                    <td>0.00%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <h2 id="error-table-caption">Transport Error Breakdown</h2>
+              <span class="panel-meta" id="error-total-meta">0 errors</span>
+            </div>
+            <div tabindex="0" role="region" aria-labelledby="error-table-caption" class="table-wrapper">
+              <table class="data-table table-errors">
+                <caption class="sr-only">Transport Error Breakdown</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Category</th>
+                    <th scope="col">Count</th>
+                    <th scope="col">Share</th>
+                  </tr>
+                </thead>
+                <tbody id="error-table-body">
+                  <tr>
+                    <th scope="row">None</th>
+                    <td>0</td>
+                    <td>0.00%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel panel-wide">
+            <div class="panel-header">
+              <h2 id="meta-table-caption">Run Configuration &amp; Request Headers</h2>
+              <span class="panel-meta" id="meta-body-info">No body</span>
+            </div>
+            <div tabindex="0" role="region" aria-labelledby="meta-table-caption" class="table-wrapper">
+              <table class="data-table table-headers">
+                <caption class="sr-only">Run Configuration and Redacted Request Headers</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Header / Parameter</th>
+                    <th scope="col">Value</th>
+                  </tr>
+                </thead>
+                <tbody id="meta-headers-body">
+                  <tr>
+                    <th scope="row">Loading</th>
+                    <td>...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section id="run-history-panel" class="panel" hidden aria-labelledby="run-history-heading">
           <div class="panel-header">
             <div>
-              <h2>Windowed Latency Percentiles (ms)</h2>
-              <p class="panel-subtitle">Per-interval HDR histogram distribution</p>
+              <h2 id="run-history-heading">Session Run History &amp; Comparison</h2>
+              <p class="panel-subtitle">Inspect past runs, reload settings, or select two runs to compare deltas</p>
             </div>
-            <div class="chart-legend" aria-label="Latency chart legend">
-              <span class="legend-item"><i class="swatch swatch-p50"></i>p50</span>
-              <span class="legend-item"><i class="swatch swatch-p90"></i>p90</span>
-              <span class="legend-item"><i class="swatch swatch-p95"></i>p95</span>
-              <span class="legend-item"><i class="swatch swatch-p99"></i>p99</span>
-              <span class="legend-item"><i class="swatch swatch-max"></i>max</span>
-            </div>
+            <span class="panel-meta" id="run-history-count">0 runs</span>
           </div>
-          <div class="canvas-wrap">
-            <canvas id="chart-latency" aria-label="Windowed latency percentiles over time"></canvas>
-            <div class="chart-tooltip" id="tooltip-latency" hidden></div>
-          </div>
-        </article>
 
-        <article class="panel chart-panel">
-          <div class="panel-header">
-            <div>
-              <h2>Responses &amp; Errors by Class</h2>
-              <p class="panel-subtitle">Requests per tick by HTTP class &amp; transport errors</p>
-            </div>
-            <div class="chart-legend" aria-label="Status class chart legend">
-              <span class="legend-item"><i class="swatch swatch-2xx"></i>2xx</span>
-              <span class="legend-item"><i class="swatch swatch-4xx"></i>4xx</span>
-              <span class="legend-item"><i class="swatch swatch-5xx"></i>5xx</span>
-              <span class="legend-item"><i class="swatch swatch-net"></i>Transport</span>
-            </div>
-          </div>
-          <div class="canvas-wrap">
-            <canvas id="chart-errors" aria-label="Responses and errors by class over time"></canvas>
-            <div class="chart-tooltip" id="tooltip-errors" hidden></div>
-          </div>
-        </article>
-      </section>
+          <div id="run-compare-panel" class="compare-strip" hidden aria-label="Run Comparison Deltas"></div>
 
-      <section class="tables-grid" aria-label="Distribution and Configuration Breakdowns">
-        <article class="panel">
-          <div class="panel-header">
-            <h2 id="status-table-caption">HTTP Status Code Breakdown</h2>
-            <span class="panel-meta" id="status-total-meta">0 codes</span>
-          </div>
-          <div tabindex="0" role="region" aria-labelledby="status-table-caption" class="table-wrapper">
-            <table class="data-table table-status">
-              <caption class="sr-only">HTTP Status Code Breakdown</caption>
+          <div tabindex="0" role="region" aria-labelledby="run-history-heading" class="table-wrapper">
+            <table class="data-table table-history">
+              <caption class="sr-only">Session Run History</caption>
               <thead>
                 <tr>
-                  <th scope="col">Status Code</th>
-                  <th scope="col">Reason</th>
-                  <th scope="col">Count</th>
-                  <th scope="col">Share</th>
+                  <th scope="col">Cmp</th>
+                  <th scope="col">Target / Preset</th>
+                  <th scope="col">VUs</th>
+                  <th scope="col">Avg RPS</th>
+                  <th scope="col">p50 / p95 / p99</th>
+                  <th scope="col">Error %</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
-              <tbody id="status-table-body">
+              <tbody id="run-history-body">
                 <tr>
                   <th scope="row">--</th>
-                  <td>Waiting for responses</td>
-                  <td>0</td>
-                  <td>0.00%</td>
+                  <td>No runs recorded yet</td>
+                  <td>--</td>
+                  <td>--</td>
+                  <td>--</td>
+                  <td>--</td>
+                  <td>--</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </article>
-
-        <article class="panel">
-          <div class="panel-header">
-            <h2 id="error-table-caption">Transport Error Breakdown</h2>
-            <span class="panel-meta" id="error-total-meta">0 errors</span>
-          </div>
-          <div tabindex="0" role="region" aria-labelledby="error-table-caption" class="table-wrapper">
-            <table class="data-table table-errors">
-              <caption class="sr-only">Transport Error Breakdown</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Category</th>
-                  <th scope="col">Count</th>
-                  <th scope="col">Share</th>
-                </tr>
-              </thead>
-              <tbody id="error-table-body">
-                <tr>
-                  <th scope="row">None</th>
-                  <td>0</td>
-                  <td>0.00%</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        <article class="panel panel-wide">
-          <div class="panel-header">
-            <h2 id="meta-table-caption">Run Configuration &amp; Request Headers</h2>
-            <span class="panel-meta" id="meta-body-info">No body</span>
-          </div>
-          <div tabindex="0" role="region" aria-labelledby="meta-table-caption" class="table-wrapper">
-            <table class="data-table table-headers">
-              <caption class="sr-only">Run Configuration and Redacted Request Headers</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Header / Parameter</th>
-                  <th scope="col">Value</th>
-                </tr>
-              </thead>
-              <tbody id="meta-headers-body">
-                <tr>
-                  <th scope="row">Loading</th>
-                  <td>...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </article>
-      </section>
-    </main>
+        </section>
+      </main>
+    </div>
   </div>
 
   <dialog id="about-dialog" class="about-dialog" closedby="any" aria-labelledby="about-dialog-title">
@@ -263,10 +493,10 @@
           <div>
             <div class="about-title-row">
               <h2 id="about-dialog-title">About rusty-loader</h2>
-              <span id="about-version-badge" class="badge badge-completed">v0.1.0</span>
+              <span id="about-version-badge" class="badge badge-completed">v0.2.0</span>
             </div>
             <p id="about-description" class="panel-subtitle">
-              High-performance, concurrent API load testing CLI written in Rust
+              High-performance, concurrent API load testing CLI &amp; desktop workbench written in Rust
             </p>
           </div>
         </div>

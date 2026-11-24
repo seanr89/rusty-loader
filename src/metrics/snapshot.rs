@@ -19,14 +19,16 @@ pub const DEFAULT_HISTORY_CAPACITY: usize = 3_600;
 /// Default capacity for the non-blocking telemetry broadcast channel.
 pub const DEFAULT_BROADCAST_CAPACITY: usize = 64;
 
-/// Lifecycle phase of an active or completed benchmark run.
+/// Lifecycle phase of an active, idle, completed, or failed benchmark run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TelemetryPhase {
+    Idle,
     RampingUp,
     Running,
     Draining,
     Completed,
+    Failed,
 }
 
 /// Windowed latency percentile summary in milliseconds for a single telemetry interval.
