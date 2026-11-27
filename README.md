@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/rusty-loader-banner.svg" alt="rusty-loader — High-Concurrency Rust HTTP Load Generator & Real-Time HDR Telemetry" width="100%">
+</p>
+
 # rusty-loader (`api-load-tester`)
 
 High-performance, concurrent command-line HTTP/REST API load testing tool written in Rust.
@@ -100,6 +104,9 @@ You can package `rusty-loader` as a signed macOS `.app` bundle (`rusty-loader.ap
 # Build the release binary (cargo build --release)
 make build
 
+# Generate packaging/macos/rusty-loader.icns from packaging/macos/icon/rusty-loader-icon.svg
+make macos-icon
+
 # Build and assemble target/release/bundle/rusty-loader.app
 make macos-bundle
 
@@ -112,6 +119,8 @@ make macos-update
 # Remove rusty-loader.app from APP_DIR
 make macos-uninstall
 ```
+
+The master macOS app icon artwork lives at `packaging/macos/icon/rusty-loader-icon.svg` (and its `1024×1024` raster at `packaging/macos/icon/rusty-loader-icon-1024.png`), compiled by `scripts/generate_macos_icon.sh` via `iconutil` into `packaging/macos/rusty-loader.icns`. `scripts/macos_bundle.sh` automatically embeds this icon into `Contents/Resources/rusty-loader.icns` and sets `CFBundleIconFile` in `Info.plist`.
 
 #### Installing or Updating in User Applications (`~/Applications`)
 By default `APP_DIR` is `/Applications`. Override `APP_DIR` to install or update without `sudo` in your user Applications folder:

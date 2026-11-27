@@ -12,12 +12,13 @@ BUNDLE_ENV := \
 	CODESIGN_IDENTITY="$(CODESIGN_IDENTITY)" \
 	VERSION="$(VERSION)"
 
-.PHONY: help build macos-bundle macos-install macos-update macos-uninstall
+.PHONY: help build macos-icon macos-bundle macos-install macos-update macos-uninstall
 
 help:
 	@echo "rusty-loader (v$(VERSION)) Makefile targets:"
 	@echo ""
 	@echo "  make build            Build the release binary (cargo build --release)"
+	@echo "  make macos-icon       Generate packaging/macos/rusty-loader.icns from master icon"
 	@echo "  make macos-bundle     Build and package target/release/bundle/$(APP_NAME).app"
 	@echo "  make macos-install    Install signed $(APP_NAME).app into $(APP_DIR)"
 	@echo "  make macos-update     Rebuild and atomically update an existing $(APP_NAME).app in $(APP_DIR)"
@@ -31,6 +32,9 @@ help:
 
 build:
 	cargo build --release
+
+macos-icon:
+	./scripts/generate_macos_icon.sh
 
 macos-bundle: build
 	$(BUNDLE_ENV) $(BUNDLE_SCRIPT) bundle

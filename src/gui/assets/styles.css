@@ -246,13 +246,25 @@ code,
   inline-size: 2.5rem;
   block-size: 2.5rem;
   border-radius: 10px;
-  background: var(--brand-accent);
-  color: var(--brand-accent-text);
-  font-weight: 800;
-  font-size: 0.95rem;
+  background: transparent;
+  padding: 0;
+  overflow: hidden;
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.22);
+}
+
+.brand-mark-lg {
+  inline-size: 3rem;
+  block-size: 3rem;
+  border-radius: 12px;
+}
+
+.brand-mark-svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
 }
 
 .brand-info {

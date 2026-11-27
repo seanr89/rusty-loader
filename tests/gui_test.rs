@@ -166,6 +166,10 @@ async fn test_gui_static_assets_and_meta_header_redaction() {
     let html = html_resp.text().await.unwrap();
     assert!(html.contains("rusty-loader"));
     assert!(html.contains(r#"<meta name="color-scheme" content="light dark">"#));
+    assert!(!html.contains(r#"href="data:,""#));
+    assert!(html.contains(r#"href="data:image/svg+xml;base64,"#));
+    assert!(html.contains(r#"id="rl-brand-mark""#));
+    assert!(html.contains(r##"href="#rl-brand-mark""##));
     assert!(!html.contains("https://"));
     assert!(!html.contains("http://"));
 
