@@ -210,6 +210,7 @@ cmd_bundle() {
   fi
 
   plutil -lint "${contents_dir}/Info.plist" >/dev/null
+  sign_bundle "$BUNDLE_APP_PATH"
   echo "Packaged macOS app bundle: ${BUNDLE_APP_PATH} (v${VERSION})"
 }
 

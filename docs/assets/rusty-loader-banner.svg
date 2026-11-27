@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" width="1280" height="340" role="img" aria-label="rusty-loader — High-Concurrency Rust HTTP Load Generator and Real-Time HDR Telemetry">
+  <defs>
+    <linearGradient id="bannerBg" x1="0" y1="0" x2="1280" y2="340" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#070d18"/>
+      <stop offset="52%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#13223b"/>
+    </linearGradient>
+
+    <radialGradient id="leftGlow" cx="18%" cy="32%" r="48%">
+      <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="rightGlow" cx="82%" cy="48%" r="46%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.16"/>
+      <stop offset="55%" stop-color="#f59e0b" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="bannerRim" x1="0" y1="0" x2="1280" y2="340" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.40"/>
+      <stop offset="50%" stop-color="#475569" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.35"/>
+    </linearGradient>
+
+    <linearGradient id="chartPanelBg" x1="720" y1="36" x2="1236" y2="304" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#09101f" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#0f1b31" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <linearGradient id="iconTileBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1120"/>
+      <stop offset="55%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#172540"/>
+    </linearGradient>
+
+    <linearGradient id="iconPulse" x1="12" y1="68" x2="86" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="50%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+
+    <linearGradient id="amberGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+
+    <linearGradient id="chartCyanArea" x1="0" y1="90" x2="0" y2="262" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0.0"/>
+    </linearGradient>
+
+    <linearGradient id="chartEmeraldArea" x1="0" y1="150" x2="0" y2="262" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+    </linearGradient>
+
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="bannerClip">
+      <rect x="2" y="2" width="1276" height="336" rx="22"/>
+    </clipPath>
+
+    <clipPath id="chartClip">
+      <rect x="720" y="34" width="518" height="272" rx="16"/>
+    </clipPath>
+  </defs>
+
+  <!-- Outer card -->
+  <rect x="2" y="2" width="1276" height="336" rx="22" fill="url(#bannerBg)"/>
+
+  <g clip-path="url(#bannerClip)">
+    <rect x="0" y="0" width="1280" height="340" fill="url(#leftGlow)"/>
+    <rect x="0" y="0" width="1280" height="340" fill="url(#rightGlow)"/>
+
+    <!-- Subtle background grid -->
+    <g stroke="#94a3b8" stroke-opacity="0.06" stroke-width="1">
+      <line x1="0" y1="68" x2="1280" y2="68"/>
+      <line x1="0" y1="136" x2="1280" y2="136"/>
+      <line x1="0" y1="204" x2="1280" y2="204"/>
+      <line x1="0" y1="272" x2="1280" y2="272"/>
+      <line x1="160" y1="0" x2="160" y2="340"/>
+      <line x1="320" y1="0" x2="320" y2="340"/>
+      <line x1="480" y1="0" x2="480" y2="340"/>
+      <line x1="640" y1="0" x2="640" y2="340"/>
+    </g>
+
+    <!-- Left brand icon mark (98x98) -->
+    <g transform="translate(46, 54)">
+      <rect x="0" y="0" width="98" height="98" rx="22" fill="url(#iconTileBg)" stroke="#38bdf8" stroke-opacity="0.35" stroke-width="2"/>
+      <path d="M6 76 C22 73, 30 62, 42 64 C54 66, 63 50, 78 47 L92 41 L92 92 L6 92 Z" fill="#10b981" fill-opacity="0.22"/>
+      <path d="M7 75 C22 72, 30 61, 42 63 C54 65, 63 49, 78 46 L90 41" fill="none" stroke="#10b981" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M13 67 L29 67 L38 45 L47 60 L60 38 L68 43 L80 24.5" fill="none" stroke="url(#iconPulse)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M29 17 L20.5 30 L27.5 30 L25 41 L35 26 L28 26 Z" fill="url(#amberGrad)"/>
+      <circle cx="80" cy="24.5" r="6.5" fill="#0f172a" stroke="#fbbf24" stroke-width="2.5"/>
+      <circle cx="80" cy="24.5" r="2.6" fill="#fef3c7"/>
+    </g>
+
+    <!-- Brand wordmark & subtitle -->
+    <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif">
+      <text x="166" y="96" fill="#f8fafc" font-size="42" font-weight="800" letter-spacing="-0.8">rusty-loader</text>
+      <rect x="424" y="67" width="132" height="28" rx="14" fill="#0ea5e9" fill-opacity="0.14" stroke="#38bdf8" stroke-opacity="0.40"/>
+      <text x="490" y="86" text-anchor="middle" fill="#7dd3fc" font-size="13" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, monospace">api-load-tester</text>
+
+      <text x="166" y="132" fill="#cbd5e1" font-size="15.5" font-weight="500">
+        High-Concurrency Rust HTTP Load Generator &amp; Real-Time HDR Telemetry
+      </text>
+
+      <!-- Feature metric pills -->
+      <g transform="translate(46, 186)" font-size="13.5" font-weight="600">
+        <!-- Pill 1 -->
+        <rect x="0" y="0" width="126" height="36" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-opacity="0.40"/>
+        <circle cx="18" cy="18" r="4.5" fill="#38bdf8"/>
+        <text x="32" y="23" fill="#e2e8f0">700+ VUs</text>
+
+        <!-- Pill 2 -->
+        <rect x="138" y="0" width="160" height="36" rx="10" fill="#0f172a" stroke="#10b981" stroke-opacity="0.40"/>
+        <circle cx="156" cy="18" r="4.5" fill="#10b981"/>
+        <text x="170" y="23" fill="#e2e8f0">HDR Percentiles</text>
+
+        <!-- Pill 3 -->
+        <rect x="310" y="0" width="154" height="36" rx="10" fill="#0f172a" stroke="#f59e0b" stroke-opacity="0.42"/>
+        <circle cx="328" cy="18" r="4.5" fill="#f59e0b"/>
+        <text x="342" y="23" fill="#e2e8f0">Live SSE Charts</text>
+
+        <!-- Pill 4 -->
+        <rect x="476" y="0" width="142" height="36" rx="10" fill="#0f172a" stroke="#64748b" stroke-opacity="0.45"/>
+        <circle cx="494" cy="18" r="4.5" fill="#38bdf8"/>
+        <text x="508" y="23" fill="#e2e8f0">&lt; 50 MB RSS</text>
+      </g>
+
+      <!-- Bottom CLI preview strip -->
+      <g transform="translate(46, 246)">
+        <rect x="0" y="0" width="618" height="44" rx="10" fill="#090f1d" stroke="#263449"/>
+        <text x="16" y="27" fill="#94a3b8" font-size="13.5" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, monospace">
+          <tspan fill="#10b981">$</tspan>
+          <tspan fill="#e2e8f0"> rusty-loader -u https://api.example.com/v1/ping -c 700 -d 30s </tspan>
+          <tspan fill="#38bdf8">--gui</tspan>
+        </text>
+      </g>
+    </g>
+
+    <!-- Right live telemetry chart preview card -->
+    <rect x="720" y="34" width="518" height="272" rx="16" fill="url(#chartPanelBg)" stroke="#263449" stroke-width="1.5"/>
+
+    <g clip-path="url(#chartClip)">
+      <!-- Chart header bar -->
+      <text x="742" y="64" fill="#f1f5f9" font-size="14" font-weight="700" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+        Live Telemetry — Throughput &amp; Latency
+      </text>
+      <circle cx="1166" cy="59" r="4" fill="#10b981"/>
+      <text x="1176" y="63" fill="#4ade80" font-size="11.5" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">LIVE</text>
+
+      <!-- Legend items -->
+      <g font-size="11.5" font-weight="600" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+        <rect x="742" y="79" width="10" height="4" rx="2" fill="#0ea5e9"/>
+        <text x="757" y="85" fill="#94a3b8">RPS</text>
+        <rect x="794" y="79" width="10" height="4" rx="2" fill="#10b981"/>
+        <text x="809" y="85" fill="#94a3b8">p50</text>
+        <rect x="844" y="79" width="10" height="4" rx="2" fill="#f59e0b"/>
+        <text x="859" y="85" fill="#94a3b8">p99</text>
+      </g>
+
+      <!-- Chart grid -->
+      <g stroke="#94a3b8" stroke-opacity="0.11" stroke-width="1">
+        <line x1="742" y1="112" x2="1216" y2="112"/>
+        <line x1="742" y1="158" x2="1216" y2="158"/>
+        <line x1="742" y1="204" x2="1216" y2="204"/>
+        <line x1="742" y1="250" x2="1216" y2="250"/>
+        <line x1="836" y1="100" x2="836" y2="256"/>
+        <line x1="931" y1="100" x2="931" y2="256"/>
+        <line x1="1026" y1="100" x2="1026" y2="256"/>
+        <line x1="1121" y1="100" x2="1121" y2="256"/>
+      </g>
+
+      <!-- Throughput bars -->
+      <g fill="#0ea5e9" fill-opacity="0.14">
+        <rect x="750" y="216" width="16" height="40" rx="3"/>
+        <rect x="782" y="198" width="16" height="58" rx="3"/>
+        <rect x="814" y="180" width="16" height="76" rx="3"/>
+        <rect x="846" y="164" width="16" height="92" rx="3"/>
+        <rect x="878" y="152" width="16" height="104" rx="3"/>
+        <rect x="910" y="146" width="16" height="110" rx="3"/>
+        <rect x="942" y="138" width="16" height="118" rx="3"/>
+        <rect x="974" y="134" width="16" height="122" rx="3"/>
+        <rect x="1006" y="128" width="16" height="128" rx="3"/>
+        <rect x="1038" y="132" width="16" height="124" rx="3"/>
+        <rect x="1070" y="122" width="16" height="134" rx="3"/>
+        <rect x="1102" y="118" width="16" height="138" rx="3"/>
+        <rect x="1134" y="114" width="16" height="142" rx="3"/>
+        <rect x="1166" y="108" width="16" height="148" rx="3"/>
+      </g>
+
+      <!-- Emerald p50 curve + fill -->
+      <path d="M742 238 C790 232, 835 218, 882 214 C935 209, 980 198, 1035 196 C1090 194, 1145 186, 1216 182 L1216 256 L742 256 Z" fill="url(#chartEmeraldArea)"/>
+      <path d="M742 238 C790 232, 835 218, 882 214 C935 209, 980 198, 1035 196 C1090 194, 1145 186, 1216 182" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"/>
+
+      <!-- Amber p99 dashed spike trace -->
+      <path d="M742 224 C786 210, 822 184, 868 188 C912 192, 956 154, 1004 162 C1052 170, 1110 144, 1158 148 C1184 150, 1202 138, 1216 135" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-dasharray="6 4" stroke-linecap="round"/>
+
+      <!-- Primary cyan throughput curve + area + beacon -->
+      <path d="M742 230 L788 216 L836 182 L884 192 L932 152 L980 162 L1028 134 L1076 142 L1124 122 L1172 126 L1204 108 L1204 256 L742 256 Z" fill="url(#chartCyanArea)"/>
+      <path d="M742 230 L788 216 L836 182 L884 192 L932 152 L980 162 L1028 134 L1076 142 L1124 122 L1172 126 L1204 108" fill="none" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)"/>
+      <circle cx="1204" cy="108" r="6" fill="#0f172a" stroke="#fbbf24" stroke-width="2.5"/>
+      <circle cx="1204" cy="108" r="2.2" fill="#fef3c7"/>
+
+      <!-- Bottom KPI readout strip inside chart card -->
+      <g transform="translate(742, 268)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11.5" font-weight="700">
+        <text x="0" y="16" fill="#38bdf8">91.8k req/s</text>
+        <text x="128" y="16" fill="#10b981">p50 0.48 ms</text>
+        <text x="256" y="16" fill="#f59e0b">p99 0.93 ms</text>
+        <text x="386" y="16" fill="#94a3b8">0.00% err</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Outer card rim -->
+  <rect x="2" y="2" width="1276" height="336" rx="22" fill="none" stroke="url(#bannerRim)" stroke-width="2"/>
+</svg>
