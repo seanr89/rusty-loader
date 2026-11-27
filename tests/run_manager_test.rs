@@ -308,6 +308,7 @@ async fn test_interactive_validation_and_multi_run_lifecycle_with_sse() {
         output_json: None,
         output_csv: Some(auto_csv.clone()),
         output_pdf: Some(auto_pdf.clone()),
+        ..Default::default()
     };
 
     let start1 = client

@@ -1143,7 +1143,12 @@ fn compute_per_tick_deltas(snapshots: &[TelemetrySnapshot]) -> (Vec<f64>, Vec<f6
     (ok2xx, err4xx, err5xx, err_net)
 }
 
-fn draw_page_two(canvas: &mut PdfCanvas, report: &ExportReport, total_pages: usize) {
+fn draw_page_two(
+    canvas: &mut PdfCanvas,
+    report: &ExportReport,
+    page_num: usize,
+    total_pages: usize,
+) {
     let snaps = &report.snapshots;
     let t_min = snaps.first().map_or(0.0, |s| s.elapsed_secs);
     let t_max = snaps.last().map_or(report.stats.total_duration_secs, |s| s.elapsed_secs);
@@ -1310,13 +1315,153 @@ fn draw_page_two(canvas: &mut PdfCanvas, report: &ExportReport, total_pages: usi
         },
     );
 
-    canvas.footer(&report.app_version, 2, total_pages);
+    canvas.footer(&report.app_version, page_num, total_pages);
+}
+
+fn draw_scenario_page(
+    canvas: &mut PdfCanvas,
+    report: &ExportReport,
+    sc: &crate::metrics::stats::ScenarioStats,
+    page_num: usize,
+    total_pages: usize,
+) {
+    canvas.card(MARGIN, 36.0, CONTENT_W, 34.0, COLOR_CARD_BG, COLOR_BORDER);
+    canvas.fill_rect(MARGIN, 36.0, 4.0, 34.0, COLOR_ACCENT);
+    canvas.text(
+        FONT_BOLD,
+        11.0,
+        MARGIN + 12.0,
+        56.5,
+        COLOR_INK,
+        "Ordered API Sequence: Journey & Per-Step Breakdown",
+    );
+    let seq_title = report
+        .scenario
+        .as_ref()
+        .and_then(|s| s.name.as_deref())
+        .unwrap_or("Sequence Run");
+    canvas.text_right(
+        FONT_MONO,
+        8.0,
+        MARGIN + CONTENT_W - 10.0,
+        56.0,
+        COLOR_SECONDARY,
+        &truncate_str(
+            &format!("{}  |  {} steps", sanitize_ascii_display(seq_title), sc.steps.len()),
+            48,
+        ),
+    );
+
+    // Journey summary card (y: 84..148)
+    let j = &sc.journeys;
+    canvas.card(MARGIN, 84.0, CONTENT_W, 64.0, COLOR_WHITE, COLOR_BORDER);
+    canvas.fill_rect(MARGIN + 0.5, 84.5, CONTENT_W - 1.0, 20.0, COLOR_ROW_ALT);
+    canvas.text(
+        FONT_BOLD,
+        8.5,
+        MARGIN + 10.0,
+        98.0,
+        COLOR_INK,
+        "End-to-End Journey Summary",
+    );
+
+    let kpis = [
+        ("Started", format_count(j.started_iterations)),
+        (
+            "Completed",
+            format!("{} ({:.1}%)", format_count(j.completed_iterations), j.completion_rate_pct),
+        ),
+        ("Aborted", format_count(j.aborted_iterations)),
+        ("Iter / sec", format!("{:.2}", j.iterations_per_sec)),
+        ("p50 / p95 / p99", format!("{:.1} / {:.1} / {:.1} ms", j.duration.p50_ms, j.duration.p95_ms, j.duration.p99_ms)),
+    ];
+    let col_w = CONTENT_W / kpis.len() as f32;
+    for (idx, (label, val)) in kpis.iter().enumerate() {
+        let kx = MARGIN + 10.0 + (idx as f32 * col_w);
+        canvas.text(FONT_REGULAR, 7.5, kx, 120.0, COLOR_MUTED, label);
+        canvas.text(FONT_BOLD, 8.8, kx, 136.0, COLOR_INK, val);
+    }
+
+    // Per-Step Table (y: 164..)
+    canvas.text(
+        FONT_BOLD,
+        9.5,
+        MARGIN,
+        172.0,
+        COLOR_INK,
+        "Per-Step Performance & Reliability",
+    );
+    let box_y = 180.0;
+    let hdr_h = 22.0;
+    let row_h = 21.0;
+    let max_rows = 24usize;
+    let visible = sc.steps.len().min(max_rows);
+    let box_h = hdr_h + (visible.max(1) as f32 * row_h) + 4.0;
+
+    canvas.card(MARGIN, box_y, CONTENT_W, box_h, COLOR_WHITE, COLOR_BORDER);
+    canvas.fill_rect(MARGIN + 0.5, box_y + 0.5, CONTENT_W - 1.0, hdr_h, COLOR_ROW_ALT);
+    canvas.line(MARGIN, box_y + hdr_h, MARGIN + CONTENT_W, box_y + hdr_h, COLOR_BORDER, 0.6, false);
+
+    let hy = box_y + 14.5;
+    canvas.text(FONT_BOLD, 7.5, MARGIN + 8.0, hy, COLOR_SECONDARY, "#");
+    canvas.text(FONT_BOLD, 7.5, MARGIN + 26.0, hy, COLOR_SECONDARY, "Step");
+    canvas.text(FONT_BOLD, 7.5, MARGIN + 150.0, hy, COLOR_SECONDARY, "Method");
+    canvas.text_right(FONT_BOLD, 7.5, MARGIN + 250.0, hy, COLOR_SECONDARY, "Reqs");
+    canvas.text_right(FONT_BOLD, 7.5, MARGIN + 305.0, hy, COLOR_SECONDARY, "RPS");
+    canvas.text_right(FONT_BOLD, 7.5, MARGIN + 365.0, hy, COLOR_SECONDARY, "p50 ms");
+    canvas.text_right(FONT_BOLD, 7.5, MARGIN + 425.0, hy, COLOR_SECONDARY, "p95 ms");
+    canvas.text_right(FONT_BOLD, 7.5, MARGIN + 480.0, hy, COLOR_SECONDARY, "Errors");
+    canvas.text_right(FONT_BOLD, 7.5, MARGIN + CONTENT_W - 8.0, hy, COLOR_SECONDARY, "Aborts");
+
+    for (idx, step) in sc.steps.iter().take(max_rows).enumerate() {
+        let ry = box_y + hdr_h + (idx as f32 * row_h);
+        if idx % 2 == 1 {
+            canvas.fill_rect(MARGIN + 0.5, ry, CONTENT_W - 1.0, row_h, COLOR_CARD_BG);
+        }
+        let ty = ry + 14.0;
+        let errs = step
+            .total_requests
+            .saturating_sub(step.successful_requests + step.other_statuses);
+        canvas.text(FONT_BOLD, 7.8, MARGIN + 8.0, ty, COLOR_SECONDARY, &step.order_number.to_string());
+        canvas.text(
+            FONT_REGULAR,
+            7.8,
+            MARGIN + 26.0,
+            ty,
+            COLOR_INK,
+            &truncate_str(&sanitize_ascii_display(&step.step_name), 22),
+        );
+        canvas.text(FONT_MONO, 7.8, MARGIN + 150.0, ty, COLOR_ACCENT, &step.method);
+        canvas.text_right(FONT_REGULAR, 7.8, MARGIN + 250.0, ty, COLOR_INK, &format_count(step.total_requests));
+        canvas.text_right(FONT_REGULAR, 7.8, MARGIN + 305.0, ty, COLOR_INK, &format!("{:.1}", step.requests_per_sec));
+        canvas.text_right(FONT_REGULAR, 7.8, MARGIN + 365.0, ty, COLOR_INK, &format!("{:.1}", step.latencies.p50_ms));
+        canvas.text_right(FONT_REGULAR, 7.8, MARGIN + 425.0, ty, COLOR_INK, &format!("{:.1}", step.latencies.p95_ms));
+        canvas.text_right(
+            FONT_REGULAR,
+            7.8,
+            MARGIN + 480.0,
+            ty,
+            if errs > 0 { COLOR_RED } else { COLOR_MUTED },
+            &format_count(errs),
+        );
+        canvas.text_right(
+            FONT_REGULAR,
+            7.8,
+            MARGIN + CONTENT_W - 8.0,
+            ty,
+            if step.aborted_iterations > 0 { COLOR_AMBER } else { COLOR_MUTED },
+            &format_count(step.aborted_iterations),
+        );
+    }
+
+    canvas.footer(&report.app_version, page_num, total_pages);
 }
 
 /// Generates an offline vector PDF 1.7 document from a redacted [`ExportReport`].
 pub fn generate_pdf_report(report: &ExportReport) -> Result<Vec<u8>> {
     let has_charts_page = report.snapshots.len() >= 2;
-    let total_pages = if has_charts_page { 2 } else { 1 };
+    let has_scenario_page = report.stats.scenario_stats.is_some();
+    let total_pages = 1 + usize::from(has_charts_page) + usize::from(has_scenario_page);
 
     let mut next_id = 1i32;
     let mut alloc = || {
@@ -1333,6 +1478,7 @@ pub fn generate_pdf_report(report: &ExportReport) -> Result<Vec<u8>> {
     let page1_id = alloc();
     let content1_id = alloc();
     let page2_pair = has_charts_page.then(|| (alloc(), alloc()));
+    let page3_pair = has_scenario_page.then(|| (alloc(), alloc()));
 
     let mut pdf = Pdf::new();
     pdf.catalog(catalog_id).pages(pages_id);
@@ -1340,6 +1486,9 @@ pub fn generate_pdf_report(report: &ExportReport) -> Result<Vec<u8>> {
     let mut kids = vec![page1_id];
     if let Some((p2, _)) = page2_pair {
         kids.push(p2);
+    }
+    if let Some((p3, _)) = page3_pair {
+        kids.push(p3);
     }
     pdf.pages(pages_id).kids(kids).count(total_pages as i32);
 
@@ -1370,10 +1519,12 @@ pub fn generate_pdf_report(report: &ExportReport) -> Result<Vec<u8>> {
         font_mono_id,
     );
 
+    let mut cur_page = 2usize;
+
     // Optional Page 2: Vector Telemetry Charts
     if let Some((page2_id, content2_id)) = page2_pair {
         let mut canvas2 = PdfCanvas::new();
-        draw_page_two(&mut canvas2, report, total_pages);
+        draw_page_two(&mut canvas2, report, cur_page, total_pages);
         let stream2 = canvas2.finish();
         write_pdf_page(
             &mut pdf,
@@ -1381,6 +1532,26 @@ pub fn generate_pdf_report(report: &ExportReport) -> Result<Vec<u8>> {
             pages_id,
             content2_id,
             &stream2,
+            font_reg_id,
+            font_bold_id,
+            font_mono_id,
+        );
+        cur_page += 1;
+    }
+
+    // Optional Scenario Page: Journey & Per-Step Breakdown
+    if let (Some((page3_id, content3_id)), Some(ref sc)) =
+        (page3_pair, &report.stats.scenario_stats)
+    {
+        let mut canvas3 = PdfCanvas::new();
+        draw_scenario_page(&mut canvas3, report, sc, cur_page, total_pages);
+        let stream3 = canvas3.finish();
+        write_pdf_page(
+            &mut pdf,
+            page3_id,
+            pages_id,
+            content3_id,
+            &stream3,
             font_reg_id,
             font_bold_id,
             font_mono_id,

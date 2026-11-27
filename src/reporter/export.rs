@@ -13,6 +13,7 @@ use crate::config::{redact_headers, sanitize_url, BenchmarkConfig};
 use crate::metrics::snapshot::TelemetrySnapshot;
 use crate::metrics::stats::BenchmarkStats;
 use crate::reporter::JsonReport;
+use crate::scenario::ScenarioMetaSummary;
 
 /// Supported report export formats across CLI, web workbench, and macOS desktop UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -98,6 +99,9 @@ pub struct ExportReport {
     pub stats: BenchmarkStats,
     /// Chronological windowed telemetry snapshots collected during execution.
     pub snapshots: Vec<TelemetrySnapshot>,
+    /// Optional redacted scenario step metadata for ordered multi-step sequences.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scenario: Option<ScenarioMetaSummary>,
 }
 
 impl ExportReport {
@@ -108,12 +112,23 @@ impl ExportReport {
         snapshots: Vec<TelemetrySnapshot>,
         preset_name: Option<String>,
     ) -> Self {
+        let scenario = config.scenario_meta();
+        let (url, method) = match scenario.as_ref() {
+            Some(sc) => (
+                sc.name
+                    .clone()
+                    .unwrap_or_else(|| format!("Sequence ({} steps)", sc.step_count)),
+                "MULTI".to_string(),
+            ),
+            None => (sanitize_url(&config.url), config.method.as_str().to_string()),
+        };
+
         Self {
             app_version: APP_VERSION.to_string(),
             timestamp: Utc::now().to_rfc3339(),
             preset_name,
-            url: sanitize_url(&config.url),
-            method: config.method.as_str().to_string(),
+            url,
+            method,
             concurrency: config.concurrency,
             configured_duration_secs: config.duration.as_secs_f64(),
             ramp_up_secs: config.ramp_up.as_secs_f64(),
@@ -121,6 +136,7 @@ impl ExportReport {
             headers: redact_headers(&config.headers),
             stats: stats.clone(),
             snapshots,
+            scenario,
         }
     }
 
@@ -141,6 +157,7 @@ impl ExportReport {
             headers: record.meta.headers.clone(),
             stats,
             snapshots: record.snapshots.clone(),
+            scenario: record.meta.scenario.clone(),
         })
     }
 
@@ -153,6 +170,7 @@ impl ExportReport {
             concurrency: self.concurrency,
             configured_duration_secs: self.configured_duration_secs,
             headers: self.headers.clone(),
+            scenario: self.scenario.clone(),
             stats: self.stats.clone(),
         }
     }

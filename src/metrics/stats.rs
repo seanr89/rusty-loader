@@ -1,4 +1,5 @@
 use crate::metrics::event::MetricEvent;
+use crate::scenario::StepFailurePolicy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -9,11 +10,12 @@ use std::sync::Arc;
 #[derive(Debug, Default)]
 pub struct LiveCounters {
     pub total_requests: AtomicU64,
-    pub successful_requests: AtomicU64, // 2xx
+    pub successful_requests: AtomicU64, // 2xx (and passed assertions/extractors)
     pub client_errors: AtomicU64,       // 4xx
     pub server_errors: AtomicU64,       // 5xx
     pub other_statuses: AtomicU64,      // 1xx, 3xx, etc.
     pub transport_errors: AtomicU64,    // timeouts, connect errors
+    pub check_failures: AtomicU64,      // sequence assertion / extraction failures on HTTP response
     pub total_bytes: AtomicU64,
     pub active_workers: AtomicUsize,
 }
@@ -33,7 +35,15 @@ impl LiveCounters {
         match event.status_code {
             Some(status) => {
                 let code = status.as_u16();
-                if (200..300).contains(&code) {
+                if event.failure_kind.is_some() {
+                    if (400..500).contains(&code) {
+                        self.client_errors.fetch_add(1, Ordering::Relaxed);
+                    } else if (500..600).contains(&code) {
+                        self.server_errors.fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        self.check_failures.fetch_add(1, Ordering::Relaxed);
+                    }
+                } else if (200..300).contains(&code) {
                     self.successful_requests.fetch_add(1, Ordering::Relaxed);
                 } else if (400..500).contains(&code) {
                     self.client_errors.fetch_add(1, Ordering::Relaxed);
@@ -79,9 +89,14 @@ impl LiveCounters {
         self.transport_errors.load(Ordering::Relaxed)
     }
 
-    /// Reads the sum of client (4xx), server (5xx), and transport errors.
+    /// Reads the total number of non-4xx/5xx assertion/extraction failures recorded so far.
+    pub fn check_failures(&self) -> u64 {
+        self.check_failures.load(Ordering::Relaxed)
+    }
+
+    /// Reads the sum of client (4xx), server (5xx), transport errors, and check failures.
     pub fn total_errors(&self) -> u64 {
-        self.client_errors() + self.server_errors() + self.transport_errors()
+        self.client_errors() + self.server_errors() + self.transport_errors() + self.check_failures()
     }
 
     /// Reads the total number of response body bytes received so far.
@@ -132,6 +147,50 @@ impl Drop for ActiveWorkerGuard {
     }
 }
 
+/// Per-step aggregate metrics for an ordered multi-step API sequence run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StepStats {
+    pub step_index: usize,
+    pub order_number: usize,
+    pub step_id: String,
+    pub step_name: String,
+    pub method: String,
+    pub target_preview: String,
+    pub on_failure: StepFailurePolicy,
+    pub total_requests: u64,
+    pub successful_requests: u64,
+    pub client_errors: u64,
+    pub server_errors: u64,
+    pub other_statuses: u64,
+    pub transport_errors: u64,
+    pub assertion_failures: u64,
+    pub extraction_failures: u64,
+    pub aborted_iterations: u64,
+    pub requests_per_sec: f64,
+    pub latencies: LatencyDistribution,
+    pub status_distribution: HashMap<u16, u64>,
+    pub error_breakdown: HashMap<String, u64>,
+}
+
+/// End-to-end iteration / journey completion statistics for ordered sequence runs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct JourneyStats {
+    pub started_iterations: u64,
+    pub completed_iterations: u64,
+    pub aborted_iterations: u64,
+    pub completion_rate_pct: f64,
+    pub iterations_per_sec: f64,
+    pub aborted_by_step: HashMap<usize, u64>,
+    pub duration: LatencyDistribution,
+}
+
+/// Complete per-step and end-to-end journey statistics attached to [`BenchmarkStats`] for sequences.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScenarioStats {
+    pub steps: Vec<StepStats>,
+    pub journeys: JourneyStats,
+}
+
 /// Complete summary statistics for a benchmark run, suitable for terminal rendering and JSON export.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BenchmarkStats {
@@ -149,6 +208,8 @@ pub struct BenchmarkStats {
     pub latencies: LatencyDistribution,
     pub status_distribution: HashMap<u16, u64>,
     pub error_breakdown: HashMap<String, u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scenario_stats: Option<ScenarioStats>,
 }
 
 /// Summary of latency percentiles and dispersion metrics in milliseconds.

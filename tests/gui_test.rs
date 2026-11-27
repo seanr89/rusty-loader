@@ -141,6 +141,7 @@ async fn test_gui_static_assets_and_meta_header_redaction() {
         output_json: None,
         output_csv: None,
         output_pdf: None,
+        scenario: None,
     });
 
     let hub = Arc::new(TelemetryHub::new(config.duration, config.ramp_up));
@@ -300,6 +301,7 @@ async fn test_gui_sse_streaming_history_hydration_and_json_export() {
         output_json: None,
         output_csv: None,
         output_pdf: None,
+        scenario: None,
     };
 
     let hub = Arc::new(TelemetryHub::with_options(
@@ -455,6 +457,7 @@ async fn test_gui_stop_endpoint_cancels_benchmark_gracefully() {
         output_json: None,
         output_csv: None,
         output_pdf: None,
+        scenario: None,
     };
 
     let hub = Arc::new(TelemetryHub::with_options(

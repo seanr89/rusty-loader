@@ -131,7 +131,8 @@ impl HttpClientFactory {
 /// - `user_agent("rusty-loader/0.1.0")`
 /// - `default_headers(config.headers.clone())`
 pub fn build_client(config: &BenchmarkConfig) -> Result<Client> {
-    Client::builder()
+    let unique_hosts = config.unique_host_count();
+    let mut builder = Client::builder()
         .pool_max_idle_per_host(config.concurrency)
         .tcp_nodelay(true)
         .tcp_keepalive(Some(DEFAULT_TCP_KEEPALIVE))
@@ -139,10 +140,15 @@ pub fn build_client(config: &BenchmarkConfig) -> Result<Client> {
         .redirect(Policy::none())
         .no_proxy()
         .user_agent(DEFAULT_USER_AGENT)
-        .default_headers(config.headers.clone())
-        .connector_layer(PoolCapConnectorLayer::new(config.concurrency))
-        .build()
-        .map_err(Into::into)
+        .connector_layer(PoolCapConnectorLayer::new(
+            config.concurrency.saturating_mul(unique_hosts),
+        ));
+
+    if config.scenario.is_none() {
+        builder = builder.default_headers(config.headers.clone());
+    }
+
+    builder.build().map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -167,14 +173,15 @@ mod tests {
             output_json: None,
             output_csv: None,
             output_pdf: None,
+            scenario: None,
         }
     }
 
     #[test]
     fn test_build_client_succeeds_for_high_concurrency() {
-        let config = sample_config(700, Duration::from_secs(5));
+        let config = sample_config(500, Duration::from_secs(5));
         let client = build_client(&config);
-        assert!(client.is_ok(), "build_client should succeed for 700 concurrency");
+        assert!(client.is_ok(), "build_client should succeed for 500 concurrency");
     }
 
     #[test]

@@ -26,6 +26,7 @@ fn make_config(url: &str, concurrency: usize, timeout: Duration) -> BenchmarkCon
         output_json: None,
         output_csv: None,
         output_pdf: None,
+        scenario: None,
     }
 }
 
@@ -45,7 +46,7 @@ async fn test_connection_pooling_and_client_policy() {
 
     let config = make_config(
         &format!("{}/redirect", mock_server.uri()),
-        700,
+        50,
         Duration::from_secs(5),
     );
     let client = HttpClientFactory::build(&config).expect("client build should succeed");

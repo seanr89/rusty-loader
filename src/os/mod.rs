@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(unix)]
 pub mod unix;
 
-/// Recommended minimum file descriptor soft limit for 700+ concurrent connections.
+/// Recommended minimum file descriptor soft limit for high-concurrency workloads.
 pub const RECOMMENDED_MIN_NOFILE: u64 = 4096;
 
 /// Structured representation of the operating system's open file descriptor limits.

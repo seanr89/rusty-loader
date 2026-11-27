@@ -1,7 +1,7 @@
 # Task 2: HTTP Client Engine, Connection Pooling & Worker Loop
 
 ## 1. Goal & Context
-Implement the high-performance HTTP client factory, tuned specifically for 700+ concurrent persistent connections without socket churning, implement OS file descriptor limit inspection, and author the core asynchronous worker task execution loop.
+Implement the high-performance HTTP client factory, tuned specifically for high-concurrency persistent connections without socket churning, implement OS file descriptor limit inspection, and author the core asynchronous worker task execution loop.
 
 ---
 
@@ -17,7 +17,7 @@ Implement the high-performance HTTP client factory, tuned specifically for 700+ 
 ## 3. Detailed Specifications
 
 ### 3.1 OS File Descriptor Check (`src/os/mod.rs`)
-Under 700 concurrent connections, each connection requires a socket file descriptor. If OS limit is low (e.g. macOS default 256), the load generator will fail with `EMFILE: Too many open files`.
+Under high concurrency, each connection requires a socket file descriptor. If OS limit is low (e.g. macOS default 256), the load generator will fail with `EMFILE: Too many open files`.
 - Inspect current soft limit (`RLIMIT_NOFILE`).
 - If current limit $< 4096$, print a visible warning message recommending the user increase limits:
   `Warning: OS file descriptor limit is 256 (recommended >= 4096). Run 'ulimit -n 65536' before testing.`

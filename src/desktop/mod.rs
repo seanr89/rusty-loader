@@ -129,6 +129,21 @@ pub fn run_desktop_app(initial_config: Option<BenchmarkConfigInput>) -> Result<(
                         .save_file();
                     let _ = resp.send(chosen);
                 }
+                NativeDialogRequest::OpenScenarioFile { resp } => {
+                    let chosen = rfd::FileDialog::new()
+                        .set_title("Import API Sequence JSON")
+                        .add_filter("Scenario JSON", &["json"])
+                        .pick_file();
+                    let _ = resp.send(chosen);
+                }
+                NativeDialogRequest::SaveScenarioFile { default_name, resp } => {
+                    let chosen = rfd::FileDialog::new()
+                        .set_title("Export API Sequence JSON")
+                        .set_file_name(&default_name)
+                        .add_filter("Scenario JSON", &["json"])
+                        .save_file();
+                    let _ = resp.send(chosen);
+                }
             },
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,

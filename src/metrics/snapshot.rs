@@ -57,6 +57,34 @@ impl From<LatencyDistribution> for WindowLatencyMs {
     }
 }
 
+/// Point-in-time per-step summary streamed inside [`TelemetrySnapshot`] for ordered sequences.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct StepTelemetrySnapshot {
+    pub step_index: usize,
+    pub order_number: usize,
+    pub step_id: String,
+    pub step_name: String,
+    pub method: String,
+    pub target_preview: String,
+    pub total_requests: u64,
+    pub successful_requests: u64,
+    pub error_count: u64,
+    pub aborted_iterations: u64,
+    pub avg_rps: f64,
+    pub window_latency_ms: WindowLatencyMs,
+}
+
+/// Point-in-time journey completion summary streamed inside [`TelemetrySnapshot`] for ordered sequences.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct JourneyTelemetrySnapshot {
+    pub started_iterations: u64,
+    pub completed_iterations: u64,
+    pub aborted_iterations: u64,
+    pub completion_rate_pct: f64,
+    pub iterations_per_sec: f64,
+    pub window_duration_ms: WindowLatencyMs,
+}
+
 /// Point-in-time telemetry snapshot streamed to live UI clients and retained in history.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TelemetrySnapshot {
@@ -78,6 +106,10 @@ pub struct TelemetrySnapshot {
     pub window_latency_ms: WindowLatencyMs,
     pub status_distribution: HashMap<u16, u64>,
     pub error_breakdown: HashMap<String, u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step_snapshots: Option<Vec<StepTelemetrySnapshot>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub journey_snapshot: Option<JourneyTelemetrySnapshot>,
 }
 
 /// Returns the current UNIX epoch timestamp in milliseconds.

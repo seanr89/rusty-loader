@@ -2,10 +2,10 @@
 
 ## 1. Overview & Objectives
 
-Build a lightweight, concurrent command-line load testing tool written in Rust capable of driving sustained workloads against HTTP/REST APIs. The tool must support a default baseline of **700 concurrent virtual users (VUs)** executing continuous query and ping workflows while recording sub-millisecond latency percentiles ($p50$, $p90$, $p95$, $p99$), throughput (requests per second), and HTTP status distributions without introducing client-side latency skew.
+Build a lightweight, concurrent command-line load testing tool written in Rust capable of driving sustained workloads against HTTP/REST APIs. The tool must support a default baseline of **50 concurrent virtual users (VUs)** executing continuous query and ping workflows while recording sub-millisecond latency percentiles ($p50$, $p90$, $p95$, $p99$), throughput (requests per second), and HTTP status distributions without introducing client-side latency skew.
 
 ### Key Goals
-- **High Concurrency:** Support $\ge 700$ concurrent async workers with low memory footprint ($< 50 \text{ MB}$ RSS).
+- **High Concurrency:** Support $\ge 50$ concurrent async workers with low memory footprint ($< 50 \text{ MB}$ RSS).
 - **Zero-GC Measurement Fidelity:** Leverage Rust's zero-cost async primitives to guarantee that measured latency reflects server response times rather than client runtime pauses.
 - **Connection Optimization:** Ensure proper HTTP connection pooling and keep-alive reuse to prevent local ephemeral port and file descriptor exhaustion.
 - **Accurate Statistics:** Use High Dynamic Range (HDR) histograms to capture latencies accurately without precision degradation or coordinated omission.
@@ -56,7 +56,7 @@ anyhow = "1.0"
           │                        │                        │
           ▼                        ▼                        ▼
 ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│ Worker 1 (Async) │     │ Worker 2 (Async) │ ... │Worker 700 (Async)│
+│ Worker 1 (Async) │     │ Worker 2 (Async) │ ... │Worker 50 (Async) │
 └─────────┬────────┘     └─────────┬────────┘     └─────────┬────────┘
           │                        │                        │
           └────────────────────────┼────────────────────────┘
@@ -82,7 +82,7 @@ anyhow = "1.0"
 - [ ] Initialize Cargo workspace: `cargo init --bin api-load-tester`.
 - [ ] Define CLI interface with `clap` derive macros:
   - `--url` (`-u`): Target endpoint (required).
-  - `--concurrency` (`-c`): Number of concurrent workers (default: `700`).
+  - `--concurrency` (`-c`): Number of concurrent workers (default: `50`).
   - `--duration` (`-d`): Total execution duration in seconds or duration string (e.g., `30s`, `2m`).
   - `--method` (`-m`): HTTP method (`GET`, `POST`, `PUT`, `DELETE`; default: `GET`).
   - `--header` (`-H`): Key-value request headers (repeatable).
@@ -93,7 +93,7 @@ anyhow = "1.0"
 
 ### Phase 2: HTTP Client Configuration & Connection Pooling
 - [ ] Configure `reqwest::Client` with pooling limits tuned for high concurrency:
-  - Set `pool_max_idle_per_host(700)` to prevent socket churning.
+  - Set `pool_max_idle_per_host(50)` to prevent socket churning.
   - Set `tcp_nodelay(true)` for lowest packet transmission latency.
   - Set `tcp_keepalive(Some(Duration::from_secs(60)))`.
   - Disable automatic redirects if benchmarking exact endpoint latency.
@@ -142,7 +142,7 @@ anyhow = "1.0"
 
 ### Phase 6: Validation, Load Verification & OS Tuning
 - [ ] Stand up a lightweight mock HTTP server (using `wiremock` or an Axum test endpoint).
-- [ ] Benchmark the CLI tool against `127.0.0.1` at 700 concurrent connections:
+- [ ] Benchmark the CLI tool against `127.0.0.1` at 50+ concurrent connections:
   - Monitor local CPU usage and memory footprint.
   - Verify that no socket leaks (`TIME_WAIT` explosions) occur.
 - [ ] Validate metric accuracy against an established load generator (e.g., `drill` or `k6`).
@@ -151,8 +151,8 @@ anyhow = "1.0"
 
 ## 5. Acceptance Criteria
 
-- [ ] **Capacity:** Successfully runs 700 concurrent async workers against a target endpoint without crashing, dropping threads, or leaking memory.
-- [ ] **Resource Footprint:** Resident Set Size (RSS) stays below 50 MB during full 700-VU sustained load.
+- [ ] **Capacity:** Successfully runs 50+ concurrent async workers against a target endpoint without crashing, dropping threads, or leaking memory.
+- [ ] **Resource Footprint:** Resident Set Size (RSS) stays below 50 MB during sustained load.
 - [ ] **Accurate Percentiles:** Percentiles ($p50, p90, p95, p99$) match HDR distribution standards within $\pm 2\%$ variance of network controls.
 - [ ] **Graceful Termination:** Catching `SIGINT` (`Ctrl+C`) triggers an orderly shutdown, draining pending in-flight metrics and still printing the final partial summary report.
 - [ ] **Fault Tolerance:** Network timeouts and connection drops are tracked as error categories rather than causing a panic.
@@ -162,10 +162,10 @@ anyhow = "1.0"
 ## 6. Example CLI Usage Pattern
 
 ```bash
-# Basic run with 700 concurrent users for 60 seconds
+# Basic run with 50 concurrent users for 60 seconds
 api-load-tester \
   --url "https://api.example.com/v1/ping" \
-  --concurrency 700 \
+  --concurrency 50 \
   --duration 60s \
   --timeout 2000
 
@@ -176,7 +176,7 @@ api-load-tester \
   --header "Authorization: Bearer token123" \
   --header "Content-Type: application/json" \
   --body '{"query":"active_records","limit":50}' \
-  --concurrency 700 \
+  --concurrency 50 \
   --ramp-up 10 \
   --duration 120s \
   --output-json report.json

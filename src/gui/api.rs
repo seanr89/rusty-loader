@@ -21,6 +21,7 @@ pub use crate::config::{is_sensitive_header, redact_headers, sanitize_url};
 use crate::config::BenchmarkConfig;
 use crate::metrics::snapshot::{TelemetryHub, TelemetryPhase, TelemetrySnapshot};
 use crate::metrics::stats::{BenchmarkStats, LatencyDistribution, LiveCounters};
+use crate::scenario::{RequestMode, ScenarioMetaSummary};
 
 const INDEX_HTML: &str = include_str!("assets/index.html");
 const STYLES_CSS: &str = include_str!("assets/styles.css");
@@ -60,6 +61,10 @@ pub struct MetaResponse {
     pub phase: TelemetryPhase,
     #[serde(default)]
     pub mode: GuiMode,
+    #[serde(default)]
+    pub request_mode: RequestMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scenario: Option<ScenarioMetaSummary>,
     #[serde(default)]
     pub run_id: Option<String>,
     #[serde(default)]
@@ -128,18 +133,40 @@ pub fn meta_from_config(
     preset_name: Option<String>,
     error_message: Option<String>,
 ) -> MetaResponse {
+    let scenario = config.scenario_meta();
+    let (request_mode, url, method, has_body, body_size_bytes) = match scenario.as_ref() {
+        Some(sc) => (
+            RequestMode::Sequence,
+            sc.name
+                .clone()
+                .unwrap_or_else(|| format!("Sequence ({} steps)", sc.step_count)),
+            "MULTI".to_string(),
+            false,
+            0,
+        ),
+        None => (
+            RequestMode::Single,
+            sanitize_url(&config.url),
+            config.method.as_str().to_string(),
+            config.body.is_some(),
+            config.body_bytes().map(<[u8]>::len).unwrap_or(0),
+        ),
+    };
+
     MetaResponse {
-        url: sanitize_url(&config.url),
-        method: config.method.as_str().to_string(),
+        url,
+        method,
         concurrency: config.concurrency,
         duration_secs: config.duration.as_secs_f64(),
         ramp_up_secs: config.ramp_up.as_secs_f64(),
         timeout_ms: config.timeout.as_millis() as u64,
         headers: redact_headers(&config.headers),
-        has_body: config.body.is_some(),
-        body_size_bytes: config.body_bytes().map(<[u8]>::len).unwrap_or(0),
+        has_body,
+        body_size_bytes,
         phase,
         mode,
+        request_mode,
+        scenario,
         run_id,
         preset_name,
         error_message,
@@ -284,6 +311,7 @@ pub fn build_partial_stats_from_parts(
             },
             status_distribution: latest.status_distribution.clone(),
             error_breakdown: latest.error_breakdown.clone(),
+            scenario_stats: None,
         };
     }
 
@@ -313,6 +341,7 @@ pub fn build_partial_stats_from_parts(
         latencies: LatencyDistribution::default(),
         status_distribution: HashMap::new(),
         error_breakdown: HashMap::new(),
+        scenario_stats: None,
     }
 }
 

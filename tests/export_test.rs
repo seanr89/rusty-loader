@@ -47,6 +47,7 @@ fn redacted_test_config(raw_url: &str) -> BenchmarkConfig {
         output_json: None,
         output_csv: None,
         output_pdf: None,
+        scenario: None,
     }
 }
 
@@ -88,6 +89,7 @@ fn sample_stats(with_errors: bool) -> BenchmarkStats {
         },
         status_distribution,
         error_breakdown,
+        scenario_stats: None,
     }
 }
 
@@ -127,6 +129,8 @@ fn sample_snapshots(count: usize) -> Vec<TelemetrySnapshot> {
                 },
                 status_distribution: HashMap::new(),
                 error_breakdown: HashMap::new(),
+                step_snapshots: None,
+                journey_snapshot: None,
             }
         })
         .collect()

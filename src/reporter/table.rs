@@ -7,7 +7,7 @@ use comfy_table::{Cell, ContentArrangement, Table};
 use reqwest::StatusCode;
 
 use crate::config::BenchmarkConfig;
-use crate::metrics::stats::BenchmarkStats;
+use crate::metrics::stats::{BenchmarkStats, ScenarioStats};
 
 /// Formats a latency value in milliseconds with 2 decimal places (e.g., `"1.24 ms"`).
 pub fn format_latency(ms: f64) -> String {
@@ -78,7 +78,9 @@ pub fn build_overview_table(config: &BenchmarkConfig, stats: &BenchmarkStats) ->
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![Cell::new("Metric"), Cell::new("Value")]);
 
-    let total_errors = stats.client_errors + stats.server_errors + stats.transport_errors;
+    let total_errors = stats.total_requests.saturating_sub(
+        stats.successful_requests + stats.other_statuses,
+    );
     let (success_pct, error_pct) = if stats.total_requests > 0 {
         (
             (stats.successful_requests as f64 / stats.total_requests as f64) * 100.0,
@@ -88,14 +90,29 @@ pub fn build_overview_table(config: &BenchmarkConfig, stats: &BenchmarkStats) ->
         (0.0, 0.0)
     };
 
-    table.add_row(vec![
-        Cell::new("Target URL"),
-        Cell::new(config.url.as_str()),
-    ]);
-    table.add_row(vec![
-        Cell::new("Method"),
-        Cell::new(config.method.as_str()),
-    ]);
+    if let Some(sc_meta) = config.scenario_meta() {
+        table.add_row(vec![
+            Cell::new("Sequence"),
+            Cell::new(
+                sc_meta
+                    .name
+                    .unwrap_or_else(|| format!("Ordered Sequence ({} steps)", sc_meta.step_count)),
+            ),
+        ]);
+        table.add_row(vec![
+            Cell::new("Enabled Steps"),
+            Cell::new(sc_meta.step_count.to_string()),
+        ]);
+    } else {
+        table.add_row(vec![
+            Cell::new("Target URL"),
+            Cell::new(config.url.as_str()),
+        ]);
+        table.add_row(vec![
+            Cell::new("Method"),
+            Cell::new(config.method.as_str()),
+        ]);
+    }
     table.add_row(vec![
         Cell::new("Concurrency (VUs)"),
         Cell::new(config.concurrency.to_string()),
@@ -253,6 +270,89 @@ pub fn build_error_table(stats: &BenchmarkStats) -> Option<Table> {
     Some(table)
 }
 
+/// Builds Table 5 (Conditional): Ordered Sequence Journey Summary.
+pub fn build_journey_table(scenario: &ScenarioStats) -> Table {
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![Cell::new("Journey Metric"), Cell::new("Value")]);
+
+    let j = &scenario.journeys;
+    table.add_row(vec![
+        Cell::new("Started Iterations"),
+        Cell::new(j.started_iterations.to_string()),
+    ]);
+    table.add_row(vec![
+        Cell::new("Completed Iterations"),
+        Cell::new(format!(
+            "{} ({:.2}%)",
+            j.completed_iterations, j.completion_rate_pct
+        )),
+    ]);
+    table.add_row(vec![
+        Cell::new("Aborted Iterations"),
+        Cell::new(j.aborted_iterations.to_string()),
+    ]);
+    table.add_row(vec![
+        Cell::new("Journeys / sec"),
+        Cell::new(format!("{:.2} iter/s", j.iterations_per_sec)),
+    ]);
+    table.add_row(vec![
+        Cell::new("Journey p50 / p95 / p99"),
+        Cell::new(format!(
+            "{} / {} / {}",
+            format_latency(j.duration.p50_ms),
+            format_latency(j.duration.p95_ms),
+            format_latency(j.duration.p99_ms)
+        )),
+    ]);
+
+    table
+}
+
+/// Builds Table 6 (Conditional): Per-Step Sequence Telemetry Breakdown.
+pub fn build_steps_table(scenario: &ScenarioStats) -> Table {
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![
+            Cell::new("#"),
+            Cell::new("Step"),
+            Cell::new("Method"),
+            Cell::new("Reqs"),
+            Cell::new("RPS"),
+            Cell::new("p50"),
+            Cell::new("p95"),
+            Cell::new("p99"),
+            Cell::new("Errors"),
+            Cell::new("Aborts"),
+        ]);
+
+    for step in &scenario.steps {
+        let errs = step
+            .total_requests
+            .saturating_sub(step.successful_requests + step.other_statuses);
+        table.add_row(vec![
+            Cell::new(step.order_number.to_string()),
+            Cell::new(&step.step_name),
+            Cell::new(&step.method),
+            Cell::new(step.total_requests.to_string()),
+            Cell::new(format!("{:.1}", step.requests_per_sec)),
+            Cell::new(format_latency_colored(step.latencies.p50_ms)),
+            Cell::new(format_latency_colored(step.latencies.p95_ms)),
+            Cell::new(format_latency_colored(step.latencies.p99_ms)),
+            Cell::new(errs.to_string()),
+            Cell::new(step.aborted_iterations.to_string()),
+        ]);
+    }
+
+    table
+}
+
 /// Renders all benchmark summary tables into a single formatted string.
 pub fn render_summary_tables(config: &BenchmarkConfig, stats: &BenchmarkStats) -> String {
     let mut out = String::new();
@@ -271,6 +371,13 @@ pub fn render_summary_tables(config: &BenchmarkConfig, stats: &BenchmarkStats) -
     if let Some(error_table) = build_error_table(stats) {
         out.push_str("\n\n=== Error Breakdown ===\n");
         out.push_str(&error_table.to_string());
+    }
+
+    if let Some(ref sc_stats) = stats.scenario_stats {
+        out.push_str("\n\n=== Sequence Journey Summary ===\n");
+        out.push_str(&build_journey_table(sc_stats).to_string());
+        out.push_str("\n\n=== Per-Step Sequence Breakdown ===\n");
+        out.push_str(&build_steps_table(sc_stats).to_string());
     }
 
     out.push('\n');

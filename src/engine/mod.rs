@@ -18,7 +18,7 @@ use crate::client::HttpClientFactory;
 use crate::config::BenchmarkConfig;
 use crate::metrics::event::MetricEvent;
 use crate::metrics::stats::{BenchmarkStats, LiveCounters};
-use crate::metrics::{spawn_collector_with_hub, TelemetryHub};
+use crate::metrics::{spawn_collector_with_options, TelemetryHub};
 
 /// Maximum grace period to wait for in-flight workers to finish after cancellation.
 pub const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(3);
@@ -117,11 +117,13 @@ impl TestController {
         let cancel_token = self.cancel_token.clone();
 
         // 1. Spawn the metrics collector task.
-        let collector_handle = spawn_collector_with_hub(
+        let scenario_steps = self.config.scenario.as_ref().map(|s| s.step_metas());
+        let collector_handle = spawn_collector_with_options(
             rx,
             Arc::clone(&self.counters),
             start_time,
             self.telemetry_hub.clone(),
+            scenario_steps,
         );
 
         // 2. Spawn the worker pool (immediately if ramp_up == 0, or concurrently across ramp_up).
@@ -234,6 +236,7 @@ mod tests {
             output_json: None,
             output_csv: None,
             output_pdf: None,
+            scenario: None,
         }
     }
 

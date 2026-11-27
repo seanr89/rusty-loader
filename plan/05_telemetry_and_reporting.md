@@ -32,7 +32,7 @@ Render 3 distinct tables with `comfy-table`:
 | Metric | Value |
 |---|---|
 | Target URL | `https://api.example.com/v1/ping` |
-| Concurrency (VUs) | `700` |
+| Concurrency (VUs) | `50` |
 | Total Duration | `60.00 s` |
 | Total Requests | `124,500` |
 | Successful (2xx) | `124,480 (99.98%)` |

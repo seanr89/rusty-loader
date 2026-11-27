@@ -19,10 +19,22 @@ pub struct Cli {
     #[arg(
         short = 'u',
         long = "url",
-        required_unless_present_any = ["changelog", "desktop", "ui_serve"],
+        required_unless_present_any = ["changelog", "desktop", "ui_serve", "scenario"],
         default_value = ""
     )]
     pub url: String,
+
+    /// Path to an ordered multi-step API sequence scenario JSON file
+    #[arg(long = "scenario")]
+    pub scenario: Option<PathBuf>,
+
+    /// Validate and print the pre-run API sequence review without sending load traffic
+    #[arg(long = "review", default_value_t = false)]
+    pub review: bool,
+
+    /// Execute a single-VU, 1-iteration trace with redacted diagnostics and exit
+    #[arg(long = "dry-run", default_value_t = false)]
+    pub dry_run: bool,
 
     /// Print the embedded CHANGELOG.md release notes and exit
     #[arg(long = "changelog", default_value_t = false)]
@@ -37,7 +49,7 @@ pub struct Cli {
     pub ui_serve: bool,
 
     /// Number of concurrent virtual users / workers
-    #[arg(short = 'c', long = "concurrency", default_value_t = 700)]
+    #[arg(short = 'c', long = "concurrency", default_value_t = 50)]
     pub concurrency: usize,
 
     /// Total benchmark duration (e.g. 30s, 2m, 1000ms, or raw seconds like 60)

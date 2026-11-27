@@ -57,6 +57,7 @@ fn build_config(
         output_json: None,
         output_csv: None,
         output_pdf: None,
+        scenario: None,
     }
 }
 

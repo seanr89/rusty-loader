@@ -185,6 +185,76 @@ pub fn serialize_csv_report(report: &ExportReport) -> Result<String> {
         stats.latencies.max_ms,
     )?;
 
+    if let Some(ref sc) = stats.scenario_stats {
+        for step in &sc.steps {
+            let step_phase = format!("step_{}:{}", step.order_number, step.step_name);
+            let step_url = escape_csv_formula(&step.target_preview);
+            let step_method = escape_csv_formula(&step.method);
+            write_csv_row(
+                &mut writer,
+                "step_summary",
+                summary_ts,
+                stats.total_duration_secs,
+                &step_phase,
+                step_url.as_ref(),
+                step_method.as_ref(),
+                &concurrency_cell,
+                step.aborted_iterations as usize,
+                step.total_requests,
+                None,
+                step.requests_per_sec,
+                0.0,
+                0,
+                step.successful_requests,
+                step.client_errors,
+                step.server_errors,
+                step.other_statuses,
+                step.transport_errors + step.assertion_failures + step.extraction_failures,
+                step.latencies.min_ms,
+                step.latencies.mean_ms,
+                step.latencies.p50_ms,
+                step.latencies.p90_ms,
+                step.latencies.p95_ms,
+                step.latencies.p99_ms,
+                Some(step.latencies.p99_9_ms),
+                step.latencies.max_ms,
+            )?;
+        }
+
+        let j = &sc.journeys;
+        let journey_str = format!("completion={:.2}%", j.completion_rate_pct);
+        let journey_label = escape_csv_formula(&journey_str);
+        write_csv_row(
+            &mut writer,
+            "journey_summary",
+            summary_ts,
+            stats.total_duration_secs,
+            "completed",
+            journey_label.as_ref(),
+            "JOURNEY",
+            &concurrency_cell,
+            0,
+            j.started_iterations,
+            None,
+            j.iterations_per_sec,
+            stats.bytes_per_sec,
+            stats.total_bytes,
+            j.completed_iterations,
+            0,
+            0,
+            0,
+            j.aborted_iterations,
+            j.duration.min_ms,
+            j.duration.mean_ms,
+            j.duration.p50_ms,
+            j.duration.p90_ms,
+            j.duration.p95_ms,
+            j.duration.p99_ms,
+            Some(j.duration.p99_9_ms),
+            j.duration.max_ms,
+        )?;
+    }
+
     let bytes = writer
         .into_inner()
         .context("failed to flush CSV writer buffer")?;

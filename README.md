@@ -6,13 +6,13 @@
 
 High-performance, concurrent command-line HTTP/REST API load testing tool written in Rust.
 
-`rusty-loader` (also installed as the binary alias `api-load-tester`) is engineered to drive sustained workloads at a default baseline of **700 concurrent virtual users (VUs)** while recording sub-millisecond High Dynamic Range (HDR) latency percentiles (`p50`, `p90`, `p95`, `p99`, `p99.9`), throughput (requests/sec and transfer rate), HTTP status distributions, and categorized transport errors—all within a **`< 50 MB` Resident Set Size (RSS)** memory footprint.
+`rusty-loader` (also installed as the binary alias `api-load-tester`) is engineered to drive sustained workloads at a default baseline of **50 concurrent virtual users (VUs)** while recording sub-millisecond High Dynamic Range (HDR) latency percentiles (`p50`, `p90`, `p95`, `p99`, `p99.9`), throughput (requests/sec and transfer rate), HTTP status distributions, and categorized transport errors—all within a **`< 50 MB` Resident Set Size (RSS)** memory footprint.
 
 ---
 
 ## Key Features
 
-- **700+ Concurrent Virtual Users:** Spawns lightweight asynchronous Tokio worker tasks sharing a connection-pooled HTTP client, sustaining 700+ concurrent connections with minimal CPU and memory overhead (`~20–30 MB` RSS).
+- **High-Concurrency Virtual Users (50+ Default):** Spawns lightweight asynchronous Tokio worker tasks sharing a connection-pooled HTTP client, sustaining high-concurrency workloads (defaulting to 50 VUs) with minimal CPU and memory overhead (`~20–30 MB` RSS).
 - **Zero-GC Latency Fidelity:** Eliminates runtime garbage-collection pauses and records request round-trip latencies (`Instant::now()` through full response body drain) into a 3-significant-figure `hdrhistogram::Histogram<u64>` spanning `1 µs` to `60,000 ms`.
 - **Connection Reuse & Socket Optimization:** Configures `reqwest::Client` with `pool_max_idle_per_host(concurrency)`, `tcp_nodelay(true)`, `tcp_keepalive(60s)`, and disabled automatic redirects (`Policy::none()`) to prevent ephemeral port exhaustion and `TIME_WAIT` socket churn.
 - **Linear Ramp-Up Orchestration:** Supports staggered worker spawning (`--ramp-up`) at $\Delta t = \frac{\text{ramp\_up}}{\text{concurrency}}$ intervals to smoothly warm up target services.
@@ -42,7 +42,7 @@ High-performance, concurrent command-line HTTP/REST API load testing tool writte
           │                        │                        │
           ▼                        ▼                        ▼
 ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│ Worker 1 (Async) │     │ Worker 2 (Async) │ ... │Worker 700 (Async)│
+│ Worker 1 (Async) │     │ Worker 2 (Async) │ ... │Worker 50 (Async) │
 └─────────┬────────┘     └─────────┬────────┘     └─────────┬────────┘
           │                        │                        │
           └────────────────────────┼────────────────────────┘
@@ -152,7 +152,7 @@ Usage: rusty-loader [OPTIONS] --url <URL>
 | Short | Long | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `-u` | `--url <URL>` | *(Required)* | Target HTTP/HTTPS endpoint URL (e.g., `https://api.example.com/v1/ping`) |
-| `-c` | `--concurrency <N>` | `700` | Number of concurrent virtual users / async workers |
+| `-c` | `--concurrency <N>` | `50` | Number of concurrent virtual users / async workers |
 | `-d` | `--duration <DURATION>` | `30s` | Total benchmark duration (`500ms`, `30s`, `2m`, `1h`, or raw seconds `60`) |
 | `-m` | `--method <METHOD>` | `GET` | HTTP request method (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`; case-insensitive) |
 | `-H` | `--header <KEY: VALUE>` | `[]` | Custom HTTP header; repeatable (e.g., `-H "Authorization: Bearer token"`) |
@@ -177,13 +177,13 @@ Usage: rusty-loader [OPTIONS] --url <URL>
 
 ## Usage Recipes
 
-### 1. Basic 700-VU Ping Test
-Run the default 700 concurrent virtual users against a health/ping endpoint for 30 seconds with a 2-second request timeout:
+### 1. Basic 50-VU Ping Test
+Run the default 50 concurrent virtual users against a health/ping endpoint for 30 seconds with a 2-second request timeout:
 
 ```bash
 rusty-loader \
   --url "https://api.example.com/v1/ping" \
-  --concurrency 700 \
+  --concurrency 50 \
   --duration 30s \
   --timeout 2000ms
 ```
@@ -198,7 +198,7 @@ api-load-tester \
   --header "Authorization: Bearer token123" \
   --header "Content-Type: application/json" \
   --body '{"query":"active_records","limit":50}' \
-  --concurrency 700 \
+  --concurrency 50 \
   --duration 60s
 ```
 
@@ -216,12 +216,12 @@ rusty-loader \
 ```
 
 ### 4. Staggered Ramp-Up Workload
-Gradually scale from 0 to 700 concurrent virtual users over the first 10 seconds of a 2-minute test:
+Gradually scale from 0 to 50 concurrent virtual users over the first 10 seconds of a 2-minute test:
 
 ```bash
 rusty-loader \
   --url "https://api.example.com/v1/search" \
-  --concurrency 700 \
+  --concurrency 50 \
   --ramp-up 10s \
   --duration 2m
 ```
@@ -232,7 +232,7 @@ Export deterministic machine-readable metrics (`report.json`), chronological `25
 ```bash
 rusty-loader \
   --url "http://127.0.0.1:8080/v1/health" \
-  --concurrency 700 \
+  --concurrency 50 \
   --duration 15s \
   --output-json artifacts/report.json \
   --output-csv artifacts/report.csv \
@@ -250,14 +250,37 @@ Launch the interactive desktop application directly from `rusty-loader.app` or f
 rusty-loader --desktop
 
 # Pre-populate the desktop form from CLI flags
-rusty-loader --desktop --url "https://api.example.com/v1/ping" --concurrency 700 --duration 30s
+rusty-loader --desktop --url "https://api.example.com/v1/ping" --concurrency 50 --duration 30s
 
 # Launch the interactive configuration workbench in your default browser (macOS or Linux)
 rusty-loader --ui-serve --gui-open
 ```
 
 - **Configuration Builder & Presets:** Configure target URL, HTTP method, concurrency, duration, ramp-up, timeout, repeatable headers (with masked sensitive values), and inline/file payloads via a native macOS file picker. Save and select reusable presets or recent runs stored with `0600` permissions at `~/Library/Application Support/rusty-loader/presets.json` (overridable via `RUSTY_LOADER_CONFIG_DIR`).
-- **Multi-Run Telemetry & Comparison:** Start and gracefully stop sequential runs (`Cmd+Enter` / `Cmd+.`) while streaming real-time KPIs, Canvas 2D charts (throughput/VUs, windowed HDR latency percentiles, status/error classes), cumulative HDR summaries, native JSON report saving, and two-run delta comparisons.
+- **Sequence Studio (Ordered Multi-Step API Sequences):** Switch from **Live Monitor** to the full-width **Sequence Studio** screen in the top bar (or click **Convert to Multi-Step Sequence…**) to build, reorder, review, dry-run (1 VU with secret redaction), import/export JSON, and benchmark stacked user journeys (`Login` → `Create` → `Checkout`).
+- **Multi-Run Telemetry & Comparison:** Start and gracefully stop sequential runs (`Cmd+Enter` / `Cmd+.`) while streaming real-time KPIs, Canvas 2D charts (throughput/VUs, windowed HDR latency percentiles, status/error classes), per-step & journey completion tables, cumulative HDR summaries, native JSON/CSV/PDF report saving, and two-run delta comparisons.
+
+---
+
+## Ordered Multi-Step API Sequences (`--scenario`)
+
+Model deterministic user journeys where each Virtual User executes an ordered set of API calls, passes dynamic values extracted from responses (`JSONPath`, `Header`, `Set-Cookie`, `StatusCode`) into downstream `{{var}}` templates, and tracks both per-step and end-to-end journey latencies.
+
+```bash
+# Review step ordering, variable dependencies, and failure policies without sending traffic
+rusty-loader --scenario checkout_flow.json --review
+
+# Run a 1-VU, 1-iteration trace with sensitive tokens and headers redacted
+rusty-loader --scenario checkout_flow.json --dry-run
+
+# Execute the sequence with CLI concurrency/duration overrides and export reports
+rusty-loader --scenario checkout_flow.json -c 100 -d 60s --output-json report.json --output-csv report.csv --output-pdf report.pdf
+
+# Open an existing scenario JSON directly inside the macOS Desktop Sequence Studio
+rusty-loader --desktop --scenario checkout_flow.json
+```
+
+For full schema details, endpoint configuration rules, and architecture notes, see [plan/ordered_api_sequences.md](./plan/ordered_api_sequences.md).
 - **Security:** Interactive endpoints require a per-session random token (`X-RL-Session` header / `HttpOnly` cookie), bind to loopback by default, and redact sensitive headers and URL credentials in run history and exports.
 - **Build Feature Flags:**
   - Default (`gui` + `desktop` on macOS): `cargo build --release`
@@ -274,7 +297,7 @@ Enable the embedded web dashboard with `--gui` to monitor live throughput, activ
 ```bash
 rusty-loader \
   --url "https://api.example.com/v1/ping" \
-  --concurrency 700 \
+  --concurrency 50 \
   --ramp-up 10s \
   --duration 60s \
   --gui \
@@ -294,7 +317,7 @@ For headless Linux load generators, keep `--gui-bind 127.0.0.1` (default) and tu
 ssh -L 8080:127.0.0.1:8080 user@remote-load-generator
 
 # 2. Run rusty-loader --gui on the remote host, then open http://127.0.0.1:8080 locally
-rusty-loader --url "https://api.example.com/v1/ping" --concurrency 700 --duration 60s --gui
+rusty-loader --url "https://api.example.com/v1/ping" --concurrency 50 --duration 60s --gui
 ```
 
 ### Embedded GUI HTTP & SSE Endpoints
@@ -318,7 +341,7 @@ rusty-loader --url "https://api.example.com/v1/ping" --concurrency 700 --duratio
   "timestamp": "2026-11-08T12:00:00.000000+00:00",
   "url": "http://127.0.0.1:8080/v1/health",
   "method": "GET",
-  "concurrency": 700,
+  "concurrency": 50,
   "configured_duration_secs": 15.0,
   "headers": {},
   "total_duration_secs": 15.004,
@@ -351,9 +374,9 @@ rusty-loader --url "https://api.example.com/v1/ping" --concurrency 700 --duratio
 
 ---
 
-## OS Tuning for High Concurrency (`700+ VUs`)
+## OS Tuning for High Concurrency (`500+ VUs`)
 
-When running 700+ concurrent connections on macOS or Linux, ensure your shell's open file descriptor soft limit is at least `4096` (recommended `65536`):
+When running high-concurrency workloads on macOS or Linux, ensure your shell's open file descriptor soft limit is at least `4096` (recommended `65536`):
 
 ```bash
 # Check current soft limit

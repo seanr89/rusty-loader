@@ -21,15 +21,18 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::oneshot;
 
 use crate::changelog::{about_payload, changelog_payload, APP_VERSION};
-use crate::config::{validate_input, BenchmarkConfigInput, ValidationReport};
+use crate::config::{
+    validate_input_with_review, BenchmarkConfig, BenchmarkConfigInput, ValidationReport,
+};
 use crate::gui::api::{
     render_export_download, serve_app_js, serve_index, serve_styles, GuiMode, MetaResponse,
 };
-use crate::gui::manager::{RunLifecycleEvent, RunManager, RunManagerError};
+use crate::gui::manager::{redact_config_input, RunLifecycleEvent, RunManager, RunManagerError};
 use crate::metrics::snapshot::TelemetrySnapshot;
 use crate::os::OsLimits;
 use crate::presets::{format_cli_command, PresetStore, PresetUpsertRequest};
 use crate::reporter::{write_export_bytes, ExportFormat};
+use crate::scenario::{execute_dry_run, load_scenario_file, ScenarioReviewReport};
 
 const SESSION_HEADER: &str = "x-rl-session";
 const SESSION_COOKIE_NAME: &str = "rl_session";
@@ -41,6 +44,13 @@ pub enum NativeDialogRequest {
     },
     SaveReportFile {
         format: ExportFormat,
+        default_name: String,
+        resp: oneshot::Sender<Option<PathBuf>>,
+    },
+    OpenScenarioFile {
+        resp: oneshot::Sender<Option<PathBuf>>,
+    },
+    SaveScenarioFile {
         default_name: String,
         resp: oneshot::Sender<Option<PathBuf>>,
     },
@@ -99,6 +109,32 @@ struct ValidateRunResponse {
     field_errors: std::collections::HashMap<String, String>,
     warnings: Vec<String>,
     cli_command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    review: Option<ScenarioReviewReport>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SaveScenarioDialogRequest {
+    config: BenchmarkConfigInput,
+    #[serde(default = "default_true_flag")]
+    redact_secrets: bool,
+}
+
+const fn default_true_flag() -> bool {
+    true
+}
+
+#[derive(Debug, Serialize)]
+struct OpenScenarioFileResponse {
+    cancelled: bool,
+    path: Option<String>,
+    config: Option<BenchmarkConfigInput>,
+}
+
+#[derive(Debug, Serialize)]
+struct SaveScenarioFileResponse {
+    cancelled: bool,
+    path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -144,6 +180,7 @@ struct SaveReportDialogResponse {
 pub fn build_interactive_router(state: InteractiveState) -> Router {
     let protected = Router::new()
         .route("/api/runs/validate", post(post_validate_run))
+        .route("/api/scenarios/dry-run", post(post_dry_run_scenario))
         .route("/api/runs", get(get_runs).post(post_start_run))
         .route("/api/runs/{id}", get(get_run_detail))
         .route("/api/stop", post(post_stop_run))
@@ -156,6 +193,14 @@ pub fn build_interactive_router(state: InteractiveState) -> Router {
             put(put_update_preset).delete(delete_preset),
         )
         .route("/api/dialog/open-body-file", post(post_open_body_file))
+        .route(
+            "/api/dialog/open-scenario-file",
+            post(post_open_scenario_file),
+        )
+        .route(
+            "/api/dialog/save-scenario-file",
+            post(post_save_scenario_file),
+        )
         .route("/api/dialog/save-report", post(post_save_report_dialog))
         .route("/api/dialog/save-json", post(post_save_json_dialog))
         .route_layer(middleware::from_fn_with_state(
@@ -298,11 +343,14 @@ async fn get_history(
 async fn post_validate_run(
     Json(input): Json<BenchmarkConfigInput>,
 ) -> Response {
-    let ValidationReport {
-        valid,
-        field_errors,
-        warnings,
-    } = validate_input(&input, Some(OsLimits::detect()));
+    let (
+        ValidationReport {
+            valid,
+            field_errors,
+            warnings,
+        },
+        review,
+    ) = validate_input_with_review(&input, Some(OsLimits::detect()));
     let cli_command = format_cli_command(&input, true);
 
     Json(ValidateRunResponse {
@@ -310,8 +358,43 @@ async fn post_validate_run(
         field_errors,
         warnings,
         cli_command,
+        review,
     })
     .into_response()
+}
+
+async fn post_dry_run_scenario(Json(input): Json<BenchmarkConfigInput>) -> Response {
+    let (validation, _) = validate_input_with_review(&input, Some(OsLimits::detect()));
+    if !validation.valid {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "invalid benchmark configuration",
+                "validation": validation,
+            })),
+        )
+            .into_response();
+    }
+
+    let config = match BenchmarkConfig::from_input(input) {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": err.to_string() })),
+            )
+                .into_response();
+        }
+    };
+
+    match execute_dry_run(&config).await {
+        Ok(trace) => Json(trace).into_response(),
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": err.to_string() })),
+        )
+            .into_response(),
+    }
 }
 
 async fn post_start_run(
@@ -643,6 +726,127 @@ async fn post_save_json_dialog(
 ) -> Response {
     let run_id = payload.and_then(|Json(req)| req.run_id);
     save_report_with_dialog(state, ExportFormat::Json, run_id).await
+}
+
+async fn post_open_scenario_file(State(state): State<InteractiveState>) -> Response {
+    let Some(ref dispatcher) = state.dialog_dispatcher else {
+        return (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({
+                "error": "native file dialogs are only available in the macOS desktop host"
+            })),
+        )
+            .into_response();
+    };
+
+    let (tx, rx) = oneshot::channel();
+    if !dispatcher(NativeDialogRequest::OpenScenarioFile { resp: tx }) {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({ "error": "desktop window event loop is unavailable" })),
+        )
+            .into_response();
+    }
+
+    match rx.await {
+        Ok(Some(path)) => match load_scenario_file(&path) {
+            Ok(config) => Json(OpenScenarioFileResponse {
+                cancelled: false,
+                path: Some(path.to_string_lossy().into_owned()),
+                config: Some(config),
+            })
+            .into_response(),
+            Err(err) => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": err.to_string() })),
+            )
+                .into_response(),
+        },
+        Ok(None) => Json(OpenScenarioFileResponse {
+            cancelled: true,
+            path: None,
+            config: None,
+        })
+        .into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": "native file dialog failed to respond" })),
+        )
+            .into_response(),
+    }
+}
+
+async fn post_save_scenario_file(
+    State(state): State<InteractiveState>,
+    Json(req): Json<SaveScenarioDialogRequest>,
+) -> Response {
+    let Some(ref dispatcher) = state.dialog_dispatcher else {
+        return (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({
+                "error": "native file dialogs are only available in the macOS desktop host"
+            })),
+        )
+            .into_response();
+    };
+
+    let output_cfg = if req.redact_secrets {
+        redact_config_input(&req.config)
+    } else {
+        req.config
+    };
+
+    let payload = match serde_json::to_vec_pretty(&output_cfg) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("failed to serialize scenario: {err}") })),
+            )
+                .into_response();
+        }
+    };
+
+    let (tx, rx) = oneshot::channel();
+    if !dispatcher(NativeDialogRequest::SaveScenarioFile {
+        default_name: "scenario.json".to_string(),
+        resp: tx,
+    }) {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({ "error": "desktop window event loop is unavailable" })),
+        )
+            .into_response();
+    }
+
+    match rx.await {
+        Ok(Some(path)) => {
+            if let Err(err) = write_export_bytes(&path, &payload) {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": format!("failed to write '{}': {err}", path.display())
+                    })),
+                )
+                    .into_response();
+            }
+            Json(SaveScenarioFileResponse {
+                cancelled: false,
+                path: Some(path.to_string_lossy().into_owned()),
+            })
+            .into_response()
+        }
+        Ok(None) => Json(SaveScenarioFileResponse {
+            cancelled: true,
+            path: None,
+        })
+        .into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": "native save dialog failed to respond" })),
+        )
+            .into_response(),
+    }
 }
 
 struct InteractiveSseState {

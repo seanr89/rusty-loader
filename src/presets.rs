@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cli::HttpMethod;
 use crate::config::{is_sensitive_header, sanitize_url, BenchmarkConfigInput, BodyMode};
+use crate::scenario::RequestMode;
 
 /// Maximum number of recent run configurations retained in local storage.
 pub const MAX_RECENT_CONFIGS: usize = 20;
@@ -276,20 +277,48 @@ impl PresetStore {
 pub fn format_cli_command(input: &BenchmarkConfigInput, redact_secrets: bool) -> String {
     let mut parts = vec!["rusty-loader".to_string()];
 
-    let url_display = if redact_secrets {
-        Url::parse(input.url.trim())
-            .map(|u| sanitize_url(&u))
-            .unwrap_or_else(|_| input.url.trim().to_string())
+    if input.mode == RequestMode::Sequence {
+        let scenario_file = input
+            .scenario
+            .as_ref()
+            .and_then(|s| s.name.as_deref())
+            .map(|raw| {
+                let mut slug = String::new();
+                let mut prev_sep = false;
+                for ch in raw.trim().to_ascii_lowercase().chars() {
+                    if ch.is_ascii_alphanumeric() {
+                        slug.push(ch);
+                        prev_sep = false;
+                    } else if !prev_sep && !slug.is_empty() {
+                        slug.push('-');
+                        prev_sep = true;
+                    }
+                }
+                let trimmed = slug.trim_matches('-');
+                if trimmed.is_empty() {
+                    "scenario.json".to_string()
+                } else {
+                    format!("{trimmed}.json")
+                }
+            })
+            .unwrap_or_else(|| "scenario.json".to_string());
+        parts.push(format!("--scenario {}", shell_quote(&scenario_file)));
     } else {
-        input.url.trim().to_string()
-    };
-    parts.push(format!("--url {}", shell_quote(&url_display)));
+        let url_display = if redact_secrets {
+            Url::parse(input.url.trim())
+                .map(|u| sanitize_url(&u))
+                .unwrap_or_else(|_| input.url.trim().to_string())
+        } else {
+            input.url.trim().to_string()
+        };
+        parts.push(format!("--url {}", shell_quote(&url_display)));
 
-    if input.method != HttpMethod::Get {
-        parts.push(format!("--method {}", input.method));
+        if input.method != HttpMethod::Get {
+            parts.push(format!("--method {}", input.method));
+        }
     }
 
-    if input.concurrency != 700 {
+    if input.concurrency != 50 {
         parts.push(format!("--concurrency {}", input.concurrency));
     }
 
@@ -308,37 +337,39 @@ pub fn format_cli_command(input: &BenchmarkConfigInput, redact_secrets: bool) ->
         parts.push(format!("--timeout {}", shell_quote(timeout)));
     }
 
-    for entry in &input.headers {
-        if !entry.enabled || entry.name.trim().is_empty() {
-            continue;
+    if input.mode == RequestMode::Single {
+        for entry in &input.headers {
+            if !entry.enabled || entry.name.trim().is_empty() {
+                continue;
+            }
+            let name = entry.name.trim();
+            let value = if redact_secrets && is_sensitive_header(name) {
+                "[REDACTED]"
+            } else {
+                entry.value.trim()
+            };
+            parts.push(format!(
+                "--header {}",
+                shell_quote(&format!("{name}: {value}"))
+            ));
         }
-        let name = entry.name.trim();
-        let value = if redact_secrets && is_sensitive_header(name) {
-            "[REDACTED]"
-        } else {
-            entry.value.trim()
-        };
-        parts.push(format!(
-            "--header {}",
-            shell_quote(&format!("{name}: {value}"))
-        ));
-    }
 
-    match input.body_mode {
-        BodyMode::None => {}
-        BodyMode::Raw => {
-            if let Some(ref body) = input.body {
-                if !body.is_empty() {
-                    parts.push(format!("--body {}", shell_quote(body)));
+        match input.body_mode {
+            BodyMode::None => {}
+            BodyMode::Raw => {
+                if let Some(ref body) = input.body {
+                    if !body.is_empty() {
+                        parts.push(format!("--body {}", shell_quote(body)));
+                    }
                 }
             }
-        }
-        BodyMode::File => {
-            if let Some(ref path) = input.body_file {
-                let p = path.to_string_lossy();
-                let trimmed = p.trim();
-                if !trimmed.is_empty() {
-                    parts.push(format!("--body {}", shell_quote(&format!("@{trimmed}"))));
+            BodyMode::File => {
+                if let Some(ref path) = input.body_file {
+                    let p = path.to_string_lossy();
+                    let trimmed = p.trim();
+                    if !trimmed.is_empty() {
+                        parts.push(format!("--body {}", shell_quote(&format!("@{trimmed}"))));
+                    }
                 }
             }
         }

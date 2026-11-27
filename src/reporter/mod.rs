@@ -21,9 +21,9 @@ pub use live::{
 };
 pub use pdf::{export_pdf_report, generate_pdf_report, pdf_sanitize_winansi};
 pub use table::{
-    build_error_table, build_latency_table, build_overview_table, build_status_table,
-    colorize_latency, format_bytes, format_latency, format_latency_colored, format_transfer_rate,
-    print_summary_tables, render_summary_tables,
+    build_error_table, build_journey_table, build_latency_table, build_overview_table,
+    build_status_table, build_steps_table, colorize_latency, format_bytes, format_latency,
+    format_latency_colored, format_transfer_rate, print_summary_tables, render_summary_tables,
 };
 
 /// Prints the terminal summary tables and writes any configured file exports without snapshots.
@@ -69,7 +69,7 @@ mod tests {
     fn sample_config() -> BenchmarkConfig {
         BenchmarkConfig {
             url: Url::parse("https://api.example.com/v1/ping").expect("valid url"),
-            concurrency: 700,
+            concurrency: 50,
             duration: Duration::from_secs(60),
             method: Method::GET,
             headers: HeaderMap::new(),
@@ -79,6 +79,7 @@ mod tests {
             output_json: None,
             output_csv: None,
             output_pdf: None,
+            scenario: None,
         }
     }
 
@@ -111,6 +112,7 @@ mod tests {
             },
             status_distribution,
             error_breakdown: HashMap::new(),
+            scenario_stats: None,
         }
     }
 
@@ -154,7 +156,7 @@ mod tests {
         let parsed_report: JsonReport =
             serde_json::from_str(&json_str).expect("deserialize into JsonReport");
         assert_eq!(parsed_report.url, "https://api.example.com/v1/ping");
-        assert_eq!(parsed_report.concurrency, 700);
+        assert_eq!(parsed_report.concurrency, 50);
         assert_eq!(parsed_report.stats, stats);
     }
 }
