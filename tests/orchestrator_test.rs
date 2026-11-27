@@ -30,6 +30,8 @@ fn build_test_config(
         timeout: Duration::from_secs(2),
         ramp_up,
         output_json: None,
+        output_csv: None,
+        output_pdf: None,
     }
 }
 

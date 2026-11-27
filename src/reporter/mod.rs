@@ -1,30 +1,57 @@
-//! Terminal live telemetry, summary tables, and JSON report exporter.
+//! Terminal live telemetry, summary tables, and JSON/CSV/PDF report exporters.
 
+pub mod csv;
+pub mod export;
 pub mod json;
 pub mod live;
+pub mod pdf;
 pub mod table;
 
 use anyhow::Result;
 
 use crate::config::BenchmarkConfig;
+use crate::metrics::snapshot::TelemetrySnapshot;
 use crate::metrics::stats::BenchmarkStats;
 
+pub use csv::{escape_csv_formula, export_csv_report, serialize_csv_report, CSV_HEADERS};
+pub use export::{write_export_bytes, ExportFormat, ExportReport};
 pub use json::{export_json_report, serialize_json_report, JsonReport};
 pub use live::{
     compute_instantaneous_rps, create_progress_bar, format_live_message, spawn_live_progress_bar,
 };
+pub use pdf::{export_pdf_report, generate_pdf_report, pdf_sanitize_winansi};
 pub use table::{
     build_error_table, build_latency_table, build_overview_table, build_status_table,
     colorize_latency, format_bytes, format_latency, format_latency_colored, format_transfer_rate,
     print_summary_tables, render_summary_tables,
 };
 
-/// Prints the terminal summary tables and writes the optional JSON report if configured.
+/// Prints the terminal summary tables and writes any configured file exports without snapshots.
 pub fn report_results(config: &BenchmarkConfig, stats: &BenchmarkStats) -> Result<()> {
+    report_results_with_snapshots(config, stats, &[])
+}
+
+/// Prints the terminal summary tables and writes all configured report outputs (`--output-json`, `--output-csv`, `--output-pdf`).
+pub fn report_results_with_snapshots(
+    config: &BenchmarkConfig,
+    stats: &BenchmarkStats,
+    snapshots: &[TelemetrySnapshot],
+) -> Result<()> {
     print_summary_tables(config, stats);
 
     if let Some(ref output_path) = config.output_json {
         export_json_report(output_path, config, stats)?;
+    }
+
+    if config.output_csv.is_some() || config.output_pdf.is_some() {
+        let export =
+            ExportReport::from_config_redacted(config, stats, snapshots.to_vec(), None);
+        if let Some(ref csv_path) = config.output_csv {
+            export_csv_report(csv_path, &export)?;
+        }
+        if let Some(ref pdf_path) = config.output_pdf {
+            export_pdf_report(pdf_path, &export)?;
+        }
     }
 
     Ok(())
@@ -50,6 +77,8 @@ mod tests {
             timeout: Duration::from_secs(5),
             ramp_up: Duration::ZERO,
             output_json: None,
+            output_csv: None,
+            output_pdf: None,
         }
     }
 

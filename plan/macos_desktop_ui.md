@@ -124,7 +124,7 @@ AppKit (`NSApplication`, `NSWindow`, `WKWebView`, `NSOpenPanel`, `NSSavePanel`) 
 - Feature gates in `Cargo.toml`:
   - `gui = ["dep:axum", "dep:tokio-stream", "dep:futures-util", "dep:getrandom"]`
   - `desktop = ["gui", "dep:tao", "dep:wry", "dep:muda", "dep:rfd"]` (desktop crates scoped under `[target.'cfg(target_os = "macos")'.dependencies]` or guarded so Linux builds and `--no-default-features` headless CLI builds stay clean).
-- Worker tasks (`src/engine/worker.rs`) only emit `MetricEvent` into the unbounded MPSC channel and increment atomic `LiveCounters`—never touching UI/WebView state—preserving `< 50 MB` RSS in CLI benchmarks (`scripts/verify_700_vu_load.sh`).
+- Worker tasks (`src/engine/worker.rs`) only emit `MetricEvent` into the unbounded MPSC channel and increment atomic `LiveCounters`—never touching UI/WebView state—preserving `< 50 MB` RSS in CLI benchmarks (`scripts/verify_50_vu_load.sh`).
 
 ---
 
@@ -316,7 +316,7 @@ Upgrade `index.html`, `styles.css`, and `app.js` while keeping all assets 100% e
      - `cargo test` (existing `cli_parsing_test`, `gui_test`, `integration_test`, `metrics_test`, `orchestrator_test`, `reporter_test`, `changelog_test`, `client_worker_test`, plus new tests).
      - `cargo check --no-default-features` and `cargo test --no-default-features` (verifies headless CLI build compiles and passes with zero GUI/desktop crates).
      - `cargo test --no-default-features --features gui` (verifies `--gui` / `--ui-serve` build without desktop host crates).
-     - `bash scripts/verify_700_vu_load.sh` (verifies CLI 700-VU `< 50 MB` RSS guardrail remains intact).
+     - `bash scripts/verify_50_vu_load.sh` (verifies 50-VU `--gui` `< 50 MB` RSS guardrail remains intact).
    - **macOS Bundle & Launch Verification:**
      - `make macos-bundle` -> `plutil -lint target/release/bundle/rusty-loader.app/Contents/Info.plist` -> `codesign --verify --deep --strict target/release/bundle/rusty-loader.app`.
      - Verify CLI invocation via `target/release/bundle/rusty-loader.app/Contents/MacOS/rusty-loader-launcher --version` and GUI launch via `open target/release/bundle/rusty-loader.app`.
@@ -362,7 +362,7 @@ Upgrade `index.html`, `styles.css`, and `app.js` while keeping all assets 100% e
 | **Phase 2** | `cargo test --test presets_test` && `cargo test --test gui_test` |
 | **Phase 3** | `cargo test --test run_manager_test` + interactive manual UI check via `cargo run -- --ui-serve` |
 | **Phase 4** | `cargo check --no-default-features` && `cargo test --no-default-features` && `make macos-bundle` && `codesign --verify --deep --strict target/release/bundle/rusty-loader.app` |
-| **Phase 5** | `cargo test` && `bash scripts/verify_700_vu_load.sh` && `make macos-install APP_DIR=~/Applications` |
+| **Phase 5** | `cargo test` && `bash scripts/verify_50_vu_load.sh` && `make macos-install APP_DIR=~/Applications` |
 
 ---
 

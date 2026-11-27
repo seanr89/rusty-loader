@@ -55,9 +55,27 @@
           <button id="pause-charts-btn" type="button" class="btn btn-secondary" aria-pressed="false">
             Pause Charts
           </button>
-          <a id="export-json-btn" href="/api/export/json" download="rusty-loader-report.json" class="btn btn-secondary">
-            Export JSON
-          </a>
+          <div class="export-menu-host">
+            <button id="export-menu-trigger" type="button" class="btn btn-secondary" aria-haspopup="menu" aria-expanded="false" commandfor="export-menu" command="toggle-popover">
+              Export <span class="menu-chevron" aria-hidden="true">&#9662;</span>
+            </button>
+            <div id="export-menu" popover="auto" class="menu-popover">
+              <div focusgroup="menu nomemory" aria-labelledby="export-menu-trigger" class="menu-list">
+                <button type="button" data-export-format="json">
+                  <span class="menu-label">Export JSON</span>
+                  <span class="menu-ext mono" aria-hidden="true">.json</span>
+                </button>
+                <button type="button" data-export-format="csv">
+                  <span class="menu-label">Export CSV</span>
+                  <span class="menu-ext mono" aria-hidden="true">.csv</span>
+                </button>
+                <button type="button" data-export-format="pdf">
+                  <span class="menu-label">Export PDF</span>
+                  <span class="menu-ext mono" aria-hidden="true">.pdf</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <button id="about-btn" type="button" class="btn btn-secondary">
             About
           </button>
@@ -235,10 +253,23 @@
               </div>
             </div>
 
-            <div class="field">
-              <label for="cfg-output-json">Auto-Export JSON Path (optional)</label>
-              <input id="cfg-output-json" type="text" class="control-input mono" placeholder="e.g. artifacts/report.json">
-            </div>
+            <details id="auto-export-details" class="auto-export-details">
+              <summary>Auto-Export File Paths (optional)</summary>
+              <div class="auto-export-fields">
+                <div class="field">
+                  <label for="cfg-output-json">Auto-Export JSON Path</label>
+                  <input id="cfg-output-json" type="text" class="control-input mono" placeholder="e.g. artifacts/report.json">
+                </div>
+                <div class="field">
+                  <label for="cfg-output-csv">Auto-Export CSV Path</label>
+                  <input id="cfg-output-csv" type="text" class="control-input mono" placeholder="e.g. artifacts/report.csv">
+                </div>
+                <div class="field">
+                  <label for="cfg-output-pdf">Auto-Export PDF Path</label>
+                  <input id="cfg-output-pdf" type="text" class="control-input mono" placeholder="e.g. artifacts/report.pdf">
+                </div>
+              </div>
+            </details>
 
             <div id="config-os-warning" class="notice-banner" hidden role="status"></div>
             <div id="config-form-error" class="notice-banner notice-error" hidden role="alert"></div>

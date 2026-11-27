@@ -115,11 +115,17 @@ pub fn run_desktop_app(initial_config: Option<BenchmarkConfigInput>) -> Result<(
                         .pick_file();
                     let _ = resp.send(chosen);
                 }
-                NativeDialogRequest::SaveJsonFile { default_name, resp } => {
+                NativeDialogRequest::SaveReportFile {
+                    format,
+                    default_name,
+                    resp,
+                } => {
+                    let (filter_label, extensions) = format.dialog_filter();
+                    let title = format!("Export Benchmark {}", filter_label);
                     let chosen = rfd::FileDialog::new()
-                        .set_title("Export Benchmark JSON Report")
+                        .set_title(&title)
                         .set_file_name(&default_name)
-                        .add_filter("JSON Report", &["json"])
+                        .add_filter(filter_label, extensions)
                         .save_file();
                     let _ = resp.send(chosen);
                 }

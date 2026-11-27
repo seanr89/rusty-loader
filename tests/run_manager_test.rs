@@ -286,7 +286,10 @@ async fn test_interactive_validation_and_multi_run_lifecycle_with_sse() {
         Duration::from_secs(10),
     ));
 
-    // 3. Start Run 1 (500ms) with sensitive Authorization header
+    // 3. Start Run 1 (500ms) with sensitive Authorization header and auto-export CSV/PDF paths
+    let auto_dir = TempDir::new().expect("auto-export temp dir");
+    let auto_csv = auto_dir.path().join("auto/run1.csv");
+    let auto_pdf = auto_dir.path().join("auto/run1.pdf");
     let run1_cfg = BenchmarkConfigInput {
         url: format!("{}/ok", mock_server.uri()),
         method: HttpMethod::Get,
@@ -303,6 +306,8 @@ async fn test_interactive_validation_and_multi_run_lifecycle_with_sse() {
         body: None,
         body_file: None,
         output_json: None,
+        output_csv: Some(auto_csv.clone()),
+        output_pdf: Some(auto_pdf.clone()),
     };
 
     let start1 = client
@@ -350,7 +355,37 @@ async fn test_interactive_validation_and_multi_run_lifecycle_with_sse() {
         tokio::time::sleep(Duration::from_millis(40)).await;
     }
 
-    // Verify Run 1 export redacts Authorization header
+    // Verify interactive run auto-exported redacted CSV & PDF files on completion
+    let auto_csv_raw = std::fs::read_to_string(&auto_csv).expect("auto-exported csv should exist");
+    assert!(!auto_csv_raw.contains("top-secret-run1"));
+    assert!(auto_csv_raw.contains("record_type,timestamp_ms,elapsed_secs"));
+    let auto_pdf_bytes = std::fs::read(&auto_pdf).expect("auto-exported pdf should exist");
+    assert!(auto_pdf_bytes.starts_with(b"%PDF-1.7"));
+    assert!(!String::from_utf8_lossy(&auto_pdf_bytes).contains("top-secret-run1"));
+
+    // Verify Run 1 export redacts Authorization header across JSON, CSV, and PDF
+    let unauth_csv = client
+        .get(format!("{base_url}/api/export/csv?run_id={run1_id}"))
+        .send()
+        .await
+        .expect("unauthenticated csv request");
+    assert_eq!(unauth_csv.status(), StatusCode::UNAUTHORIZED);
+
+    let unauth_pdf = client
+        .get(format!("{base_url}/api/export/pdf?run_id={run1_id}"))
+        .send()
+        .await
+        .expect("unauthenticated pdf request");
+    assert_eq!(unauth_pdf.status(), StatusCode::UNAUTHORIZED);
+
+    let unauth_save_dialog = client
+        .post(format!("{base_url}/api/dialog/save-report"))
+        .json(&serde_json::json!({ "format": "pdf", "run_id": run1_id }))
+        .send()
+        .await
+        .expect("unauthenticated save-report request");
+    assert_eq!(unauth_save_dialog.status(), StatusCode::UNAUTHORIZED);
+
     let export_report: JsonReport = client
         .get(format!("{base_url}/api/export/json?run_id={run1_id}"))
         .header("X-RL-Session", &token)
@@ -364,6 +399,39 @@ async fn test_interactive_validation_and_multi_run_lifecycle_with_sse() {
         export_report.headers.get("authorization").map(String::as_str),
         Some("[REDACTED]")
     );
+
+    let csv_resp = client
+        .get(format!("{base_url}/api/export/csv?run_id={run1_id}"))
+        .header("X-RL-Session", &token)
+        .send()
+        .await
+        .expect("export run 1 csv");
+    assert_eq!(csv_resp.status(), StatusCode::OK);
+    let csv_text = csv_resp.text().await.expect("csv body");
+    assert!(!csv_text.contains("top-secret-run1"));
+    assert!(csv_text.contains("record_type,timestamp_ms,elapsed_secs"));
+    assert!(csv_text.contains("\nsummary,") || csv_text.contains("\r\nsummary,"));
+
+    let pdf_resp = client
+        .get(format!("{base_url}/api/export/pdf?run_id={run1_id}"))
+        .header("X-RL-Session", &token)
+        .send()
+        .await
+        .expect("export run 1 pdf");
+    assert_eq!(pdf_resp.status(), StatusCode::OK);
+    let pdf_bytes = pdf_resp.bytes().await.expect("pdf bytes");
+    assert!(pdf_bytes.starts_with(b"%PDF-1.7"));
+    assert!(!String::from_utf8_lossy(&pdf_bytes).contains("top-secret-run1"));
+
+    // Without a native desktop event loop, /api/dialog/save-report returns 501 Not Implemented (authenticated)
+    let dialog_resp = client
+        .post(format!("{base_url}/api/dialog/save-report"))
+        .header("X-RL-Session", &token)
+        .json(&serde_json::json!({ "format": "csv", "run_id": run1_id }))
+        .send()
+        .await
+        .expect("POST /api/dialog/save-report");
+    assert_eq!(dialog_resp.status(), StatusCode::NOT_IMPLEMENTED);
 
     // 4. Start Run 2 sequentially in the same app session
     let mut run2_cfg = run1_cfg.clone();

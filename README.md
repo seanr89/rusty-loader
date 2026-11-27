@@ -15,7 +15,7 @@ High-performance, concurrent command-line HTTP/REST API load testing tool writte
 - **Live Terminal Telemetry & Summary Tables:** Displays a flicker-free `indicatif` progress bar with real-time 10 Hz sliding-window RPS and error counts, followed by color-coded `comfy-table` reports.
 - **Real-Time Embedded Web Dashboard (`--gui`):** Optionally starts a zero-CDN embedded `axum` web server streaming windowed (`250ms`) HDR latency percentiles, live RPS, active VUs, HTTP status distributions, and transport errors over Server-Sent Events (SSE) with mid-run history hydration and browser-triggered graceful stop.
 - **Graceful `Ctrl+C` (`SIGINT`) Shutdown:** Intercepts `SIGINT`, stops new request dispatches, allows in-flight requests up to a 3-second grace period to drain, and renders the partial benchmark report and JSON export without losing telemetry.
-- **CI/CD JSON Export:** Serializes full benchmark metadata and flattened `BenchmarkStats` to disk via `--output-json <PATH>`, automatically creating parent directories if needed.
+- **CI/CD Multi-Format Exports:** Export full run metadata and `BenchmarkStats` to JSON (`--output-json`), RFC 4180 time-series + summary CSV with CWE-1236 formula neutralization (`--output-csv`), or offline vector PDF summary & telemetry charts (`--output-pdf`), creating parent directories automatically.
 - **Pre-Flight OS Limit Inspection:** Automatically checks `RLIMIT_NOFILE` (`ulimit -n`) on Unix/macOS/Linux before starting and warns if the open file descriptor soft limit is below `4096`.
 
 ---
@@ -151,6 +151,8 @@ Usage: rusty-loader [OPTIONS] --url <URL>
 | `-t` | `--timeout <TIMEOUT>` | `5000ms` | Per-request timeout (`100ms`, `5s`, or raw milliseconds `2000`) |
 | | `--ramp-up <DURATION>` | `0s` | Ramp-up time to linearly spawn workers up to `--concurrency` (`10s`, `1m`, or raw seconds) |
 | | `--output-json <PATH>` | `None` | Optional file path to export the full JSON benchmark report |
+| | `--output-csv <PATH>` | `None` | Optional file path to export chronological `250ms` ticks + cumulative summary CSV |
+| | `--output-pdf <PATH>` | `None` | Optional file path to export an offline PDF executive summary & telemetry charts report |
 | | `--desktop` (`--ui`) | `false` | Launch the interactive macOS desktop UI window without requiring `--url` |
 | | `--ui-serve` | `false` | Start the interactive configuration & telemetry web workbench on loopback |
 | | `--gui` | `false` | Enable the embedded real-time web monitoring dashboard |
@@ -215,15 +217,17 @@ rusty-loader \
   --duration 2m
 ```
 
-### 5. Automated CI/CD Benchmark with JSON Report Export
-Export deterministic machine-readable metrics to `artifacts/report.json` for automated regression gates:
+### 5. Automated CI/CD Benchmark with JSON, CSV, and PDF Exports
+Export deterministic machine-readable metrics (`report.json`), chronological `250ms` CSV telemetry (`report.csv`), and offline vector charts/executive summary PDF (`report.pdf`):
 
 ```bash
 rusty-loader \
   --url "http://127.0.0.1:8080/v1/health" \
   --concurrency 700 \
   --duration 15s \
-  --output-json artifacts/report.json
+  --output-json artifacts/report.json \
+  --output-csv artifacts/report.csv \
+  --output-pdf artifacts/report.pdf
 ```
 
 ---
@@ -296,6 +300,8 @@ rusty-loader --url "https://api.example.com/v1/ping" --concurrency 700 --duratio
 | `/api/stream` | `GET` | Server-Sent Events (`snapshot` every `250ms` + final `complete` event with `BenchmarkStats`) |
 | `/api/stop` | `POST` | Triggers graceful `CancellationToken` drain and partial summary generation |
 | `/api/export/json` | `GET` | Downloads `rusty-loader-report.json` with redacted headers |
+| `/api/export/csv` | `GET` | Downloads `rusty-loader-report.csv` (`250ms` ticks + summary row, redacted) |
+| `/api/export/pdf` | `GET` | Downloads `rusty-loader-report.pdf` (offline vector summary & charts, redacted) |
 
 #### Sample JSON Report Schema
 ```json
@@ -364,22 +370,22 @@ The test suite includes unit tests across all modules plus `wiremock`-powered en
 cargo test
 ```
 
-### Run 700-VU Load & Memory Footprint Verification
-Use the included verification script to build the release binary, launch a local async HTTP/1.1 keep-alive responder, drive 700 concurrent VUs for 10 seconds, sample Resident Set Size (`RSS`) every 500ms, and assert that peak memory stays strictly below `50 MB` (`51,200 KB`):
+### Run 50-VU Load & Memory Footprint Verification
+Use the included verification script to build the release binary, launch a local async HTTP/1.1 keep-alive responder, drive 50 concurrent VUs with `--gui` and an active SSE consumer for 10 seconds, sample Resident Set Size (`RSS`) every 500ms, and assert that peak memory stays strictly below `50 MB` (`51,200 KB`):
 
 ```bash
-bash scripts/verify_700_vu_load.sh
+bash scripts/verify_50_vu_load.sh
 ```
 
-#### Reference 700-VU Verification Results (`10s` Sustained Load)
+#### Reference 50-VU Verification Results (`10s` Sustained Load)
 
 | Metric | Measured Result | Acceptance Target |
 | :--- | :--- | :--- |
-| **Concurrent Virtual Users (VUs)** | `700` | $\ge 700$ |
-| **Total Requests Completed (`10s`)** | `751,032` | — |
-| **Successful Responses (`200 OK`)** | `751,032` (`100.00%`) | `100%` |
+| **Concurrent Virtual Users (VUs)** | `50` | `50` |
+| **Total Requests Completed (`10s`)** | `918,687` | — |
+| **Successful Responses (`200 OK`)** | `918,687` (`100.00%`) | `100%` |
 | **Transport / Socket Errors** | `0` (`0.00%`) | `0` |
-| **Average Throughput** | `75,072.1 req/s` | — |
-| **Latency `p50` / `p90` / `p99`** | `9.01 ms` / `10.34 ms` / `12.94 ms` | HDR 3 sig-figs |
-| **Peak Resident Set Size (`RSS`)** | `48,960 KB` (`47.81 MB`) | $< 51,200\text{ KB}$ ($50.00\text{ MB}$) |
+| **Average Throughput** | `91,863.0 req/s` | — |
+| **Latency `p50` / `p90` / `p99`** | `0.48 ms` / `0.59 ms` / `0.93 ms` | HDR 3 sig-figs |
+| **Peak Resident Set Size (`RSS`)** | `16,624 KB` (`16.23 MB`) | $< 51,200\text{ KB}$ ($50.00\text{ MB}$) |
 

@@ -406,3 +406,33 @@ fn test_desktop_and_ui_serve_flags_without_url() {
     assert!(ui_serve.ui_serve);
     assert_eq!(ui_serve.gui_port, 0);
 }
+
+#[test]
+fn test_csv_and_pdf_output_flags_parsing() {
+    let cli = Cli::try_parse_from([
+        "rusty-loader",
+        "--url",
+        "https://api.example.com/v1/ping",
+        "--output-json",
+        "artifacts/report.json",
+        "--output-csv",
+        "artifacts/report.csv",
+        "--output-pdf",
+        "artifacts/report.pdf",
+    ])
+    .expect("CLI should accept --output-csv and --output-pdf");
+
+    let config = BenchmarkConfig::from_cli(cli).expect("config should validate");
+    assert_eq!(
+        config.output_json,
+        Some(PathBuf::from("artifacts/report.json"))
+    );
+    assert_eq!(
+        config.output_csv,
+        Some(PathBuf::from("artifacts/report.csv"))
+    );
+    assert_eq!(
+        config.output_pdf,
+        Some(PathBuf::from("artifacts/report.pdf"))
+    );
+}

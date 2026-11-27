@@ -43,6 +43,8 @@ hdrhistogram = "7.5"
 chrono = { version = "0.4", default-features = false, features = ["now", "serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+csv = "1.4"
+pdf-writer = "0.15"
 
 # Error Handling & System Utilities
 anyhow = "1.0"
