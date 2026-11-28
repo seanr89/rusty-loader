@@ -69,6 +69,22 @@
     formDirty: false,
     bodyMode: "none",
     headers: [],
+    activeView: "monitor",
+    configMode: "single",
+    scenario: {
+      schema_version: 1,
+      name: "",
+      base_url: "",
+      default_headers: [],
+      initial_variables: [],
+      steps: [],
+    },
+    selectedStepId: null,
+    studioTab: "edit",
+    stepSubTab: "req",
+    studioReview: null,
+    dryRunReport: null,
+    dryRunBusy: false,
     runs: [],
     compareIds: [],
     hoverIndex: {
@@ -183,6 +199,113 @@
     runHistoryCount: document.getElementById("run-history-count"),
     runComparePanel: document.getElementById("run-compare-panel"),
     runHistoryBody: document.getElementById("run-history-body"),
+    workspaceNav: document.getElementById("workspace-nav"),
+    navLiveMonitor: document.getElementById("nav-live-monitor"),
+    navSequenceStudio: document.getElementById("nav-sequence-studio"),
+    navStepCount: document.getElementById("nav-step-count"),
+    sequenceSidebarSummary: document.getElementById("sequence-sidebar-summary"),
+    sidebarSeqTitle: document.getElementById("sidebar-seq-title"),
+    sidebarSeqStatus: document.getElementById("sidebar-seq-status"),
+    sidebarStepChain: document.getElementById("sidebar-step-chain"),
+    sidebarEditSequenceBtn: document.getElementById("sidebar-edit-sequence-btn"),
+    sidebarDryRunBtn: document.getElementById("sidebar-dry-run-btn"),
+    singleModeFields: document.getElementById("single-mode-fields"),
+    singleModeRequestDetails: document.getElementById("single-mode-request-details"),
+    convertToSequenceBtn: document.getElementById("convert-to-sequence-btn"),
+    journeySummaryPanel: document.getElementById("journey-summary-panel"),
+    journeyCompletionMeta: document.getElementById("journey-completion-meta"),
+    journeySummaryGrid: document.getElementById("journey-summary-grid"),
+    stepBreakdownPanel: document.getElementById("step-breakdown-panel"),
+    stepBreakdownMeta: document.getElementById("step-breakdown-meta"),
+    stepTableBody: document.getElementById("step-table-body"),
+    sequenceStudioView: document.getElementById("sequence-studio-view"),
+    studioActiveBanner: document.getElementById("studio-active-banner"),
+    studioPresetSelect: document.getElementById("studio-preset-select"),
+    studioSeqName: document.getElementById("studio-seq-name"),
+    studioNewBtn: document.getElementById("studio-new-btn"),
+    studioSaveBtn: document.getElementById("studio-save-btn"),
+    studioSaveAsBtn: document.getElementById("studio-save-as-btn"),
+    studioImportBtn: document.getElementById("studio-import-btn"),
+    studioExportBtn: document.getElementById("studio-export-btn"),
+    studioImportFileInput: document.getElementById("studio-import-file-input"),
+    studioPresetSavePanel: document.getElementById("studio-preset-save-panel"),
+    studioPresetNameInput: document.getElementById("studio-preset-name-input"),
+    studioPresetDescInput: document.getElementById("studio-preset-desc-input"),
+    studioPresetCommitBtn: document.getElementById("studio-preset-commit-btn"),
+    studioPresetCancelBtn: document.getElementById("studio-preset-cancel-btn"),
+    studioBaseUrl: document.getElementById("studio-base-url"),
+    studioConcurrency: document.getElementById("studio-concurrency"),
+    studioDuration: document.getElementById("studio-duration"),
+    studioRampUp: document.getElementById("studio-ramp-up"),
+    studioTimeout: document.getElementById("studio-timeout"),
+    studioValidateBtn: document.getElementById("studio-validate-btn"),
+    studioDryRunBtn: document.getElementById("studio-dry-run-btn"),
+    studioStartBtn: document.getElementById("studio-start-btn"),
+    studioAddDefaultHeaderBtn: document.getElementById("studio-add-default-header-btn"),
+    studioDefaultHeadersList: document.getElementById("studio-default-headers-list"),
+    studioAddInitVarBtn: document.getElementById("studio-add-init-var-btn"),
+    studioInitVarsList: document.getElementById("studio-init-vars-list"),
+    studioValidationBanner: document.getElementById("studio-validation-banner"),
+    studioPipelineCount: document.getElementById("studio-pipeline-count"),
+    studioAddStepBtn: document.getElementById("studio-add-step-btn"),
+    stepPipelineList: document.getElementById("step-pipeline-list"),
+    studioWorkspaceTablist: document.getElementById("studio-workspace-tablist"),
+    studioTabs: Array.from(document.querySelectorAll('[role="tab"][data-studio-tab]')),
+    studioPanels: {
+      edit: document.getElementById("studio-panel-edit"),
+      review: document.getElementById("studio-panel-review"),
+    },
+    stepEditorEmpty: document.getElementById("step-editor-empty"),
+    stepEditorForm: document.getElementById("step-editor-form"),
+    stepNameInput: document.getElementById("step-name-input"),
+    stepMethodSelect: document.getElementById("step-method-select"),
+    stepEnabledCheckbox: document.getElementById("step-enabled-checkbox"),
+    stepUrlInput: document.getElementById("step-url-input"),
+    stepVarChips: document.getElementById("step-var-chips"),
+    stepSubTablist: document.getElementById("step-sub-tablist"),
+    stepSubTabs: Array.from(document.querySelectorAll('[role="tab"][data-step-subtab]')),
+    stepSubPanels: {
+      req: document.getElementById("step-panel-req"),
+      extract: document.getElementById("step-panel-extract"),
+      flow: document.getElementById("step-panel-flow"),
+    },
+    stepAddHeaderBtn: document.getElementById("step-add-header-btn"),
+    stepHeadersList: document.getElementById("step-headers-list"),
+    stepInheritedHeadersDetails: document.getElementById("step-inherited-headers-details"),
+    stepInheritedHeadersList: document.getElementById("step-inherited-headers-list"),
+    stepBodyTabs: Array.from(document.querySelectorAll('[role="tab"][data-step-body-mode]')),
+    stepBodyPanels: {
+      none: document.getElementById("step-body-panel-none"),
+      raw: document.getElementById("step-body-panel-raw"),
+      file: document.getElementById("step-body-panel-file"),
+    },
+    stepBodyRawBytes: document.getElementById("step-body-raw-bytes"),
+    stepFormatJsonBtn: document.getElementById("step-format-json-btn"),
+    stepBodyRawInput: document.getElementById("step-body-raw-input"),
+    stepBodyFileInput: document.getElementById("step-body-file-input"),
+    stepChooseBodyFileBtn: document.getElementById("step-choose-body-file-btn"),
+    stepAddExtractorBtn: document.getElementById("step-add-extractor-btn"),
+    stepExtractorsList: document.getElementById("step-extractors-list"),
+    stepStatusMode: document.getElementById("step-status-mode"),
+    stepStatusExactWrap: document.getElementById("step-status-exact-wrap"),
+    stepStatusExact: document.getElementById("step-status-exact"),
+    stepStatusRangeWrap: document.getElementById("step-status-range-wrap"),
+    stepStatusMin: document.getElementById("step-status-min"),
+    stepStatusMax: document.getElementById("step-status-max"),
+    stepOnFailure: document.getElementById("step-on-failure"),
+    stepThinkTime: document.getElementById("step-think-time"),
+    stepTimeoutOverride: document.getElementById("step-timeout-override"),
+    stepAddJsonCheckBtn: document.getElementById("step-add-json-check-btn"),
+    stepJsonChecksList: document.getElementById("step-json-checks-list"),
+    studioReviewStatusPill: document.getElementById("studio-review-status-pill"),
+    studioRefreshReviewBtn: document.getElementById("studio-refresh-review-btn"),
+    studioCopyCliBtn: document.getElementById("studio-copy-cli-btn"),
+    studioCliPreview: document.getElementById("studio-cli-preview"),
+    studioReviewAlerts: document.getElementById("studio-review-alerts"),
+    studioReviewTableBody: document.getElementById("studio-review-table-body"),
+    dryRunSummaryBadge: document.getElementById("dry-run-summary-badge"),
+    studioRunDryRunBtn: document.getElementById("studio-run-dry-run-btn"),
+    dryRunTraceList: document.getElementById("dry-run-trace-list"),
   };
 
   function sessionToken() {
@@ -373,6 +496,10 @@
       els.startRunBtn.disabled = running;
       els.startRunBtn.textContent = running ? "Benchmark Running..." : "Start Load Test";
     }
+    if (els.studioStartBtn) {
+      els.studioStartBtn.disabled = running;
+      els.studioStartBtn.textContent = running ? "Benchmark Running..." : "Start Load Test";
+    }
     if (els.stopRunBtn) {
       els.stopRunBtn.disabled = !running || phase === "draining";
       els.stopRunBtn.textContent =
@@ -386,6 +513,9 @@
                 ? "Failed"
                 : "Stop Run";
     }
+    if (typeof toggleStudioReadOnly === "function") {
+      toggleStudioReadOnly(running);
+    }
   }
 
   function updateMetaDisplay(meta) {
@@ -397,7 +527,9 @@
     els.kpiRampUp.textContent = `Ramp-up: ${Number(meta.ramp_up_secs || 0).toFixed(1)}s`;
     els.kpiTimeout.textContent = `Timeout: ${meta.timeout_ms} ms`;
 
-    if (meta.has_body) {
+    if (meta.request_mode === "sequence" && meta.scenario) {
+      els.metaBodyInfo.textContent = `${meta.scenario.step_count} ordered steps`;
+    } else if (meta.has_body) {
       els.metaBodyInfo.textContent = `Request body: ${formatBytes(meta.body_size_bytes)}`;
     } else {
       els.metaBodyInfo.textContent = "No request body";
@@ -419,16 +551,35 @@
     const tbody = els.metaHeadersBody;
     tbody.replaceChildren();
 
-    const rows = [
-      ["Target URL", meta.url || "--"],
-      ["HTTP Method", meta.method || "GET"],
-      ["Target Concurrency", `${meta.concurrency} VUs`],
-      ["Configured Duration", `${Number(meta.duration_secs).toFixed(2)} s`],
-      ["Ramp-Up Duration", `${Number(meta.ramp_up_secs).toFixed(2)} s`],
-      ["Request Timeout", `${meta.timeout_ms} ms`],
-    ];
+    const isSeq = meta.request_mode === "sequence" && meta.scenario;
+    const rows = isSeq
+      ? [
+          ["Sequence Name", meta.scenario.name || meta.url || "--"],
+          ["Base URL", meta.scenario.base_url || "(per-step absolute URLs)"],
+          ["Enabled Steps", String(meta.scenario.step_count)],
+          ["Target Concurrency", `${meta.concurrency} VUs`],
+          ["Configured Duration", `${Number(meta.duration_secs).toFixed(2)} s`],
+          ["Ramp-Up Duration", `${Number(meta.ramp_up_secs).toFixed(2)} s`],
+          ["Default Timeout", `${meta.timeout_ms} ms`],
+        ]
+      : [
+          ["Target URL", meta.url || "--"],
+          ["HTTP Method", meta.method || "GET"],
+          ["Target Concurrency", `${meta.concurrency} VUs`],
+          ["Configured Duration", `${Number(meta.duration_secs).toFixed(2)} s`],
+          ["Ramp-Up Duration", `${Number(meta.ramp_up_secs).toFixed(2)} s`],
+          ["Request Timeout", `${meta.timeout_ms} ms`],
+        ];
     if (meta.preset_name) {
       rows.unshift(["Preset", meta.preset_name]);
+    }
+    if (isSeq && Array.isArray(meta.scenario.steps)) {
+      for (const st of meta.scenario.steps) {
+        rows.push([
+          `Step #${st.order_number}: ${st.name}`,
+          `${st.method} ${st.target_preview} (${st.on_failure})`,
+        ]);
+      }
     }
 
     const headerEntries = Object.entries(meta.headers || {}).sort(([a], [b]) => a.localeCompare(b));
@@ -447,6 +598,117 @@
       tr.append(th, td);
       tbody.appendChild(tr);
     }
+  }
+
+  function renderJourneySummary(journey, isFinal) {
+    if (!els.journeySummaryPanel || !els.journeySummaryGrid) return;
+    if (!journey) {
+      els.journeySummaryPanel.hidden = true;
+      els.journeySummaryGrid.replaceChildren();
+      return;
+    }
+
+    const started = journey.started_iterations || 0;
+    const completed = journey.completed_iterations || 0;
+    const aborted = journey.aborted_iterations || 0;
+    const pct = Number(journey.completion_rate_pct || 0);
+    const iterPerSec = Number(journey.iterations_per_sec || 0);
+    const dist = isFinal ? journey.duration : journey.window_duration_ms;
+
+    if (els.journeyCompletionMeta) {
+      els.journeyCompletionMeta.textContent = `${completed} / ${started} completed (${pct.toFixed(2)}%)`;
+    }
+
+    const items = [
+      ["Started Iterations", formatNumber(started)],
+      ["Completed Iterations", `${formatNumber(completed)} (${pct.toFixed(2)}%)`],
+      ["Aborted Iterations", formatNumber(aborted)],
+      ["Journeys / sec", `${iterPerSec.toFixed(2)} iter/s`],
+      ["Journey p50", formatMs(dist ? (isFinal ? dist.p50_ms : dist.p50) : 0)],
+      ["Journey p95", formatMs(dist ? (isFinal ? dist.p95_ms : dist.p95) : 0)],
+      ["Journey p99", formatMs(dist ? (isFinal ? dist.p99_ms : dist.p99) : 0)],
+      ["Journey Max", formatMs(dist ? (isFinal ? dist.max_ms : dist.max) : 0)],
+    ];
+
+    els.journeySummaryGrid.replaceChildren();
+    for (const [label, value] of items) {
+      const item = document.createElement("div");
+      item.className = "summary-stat-item";
+      const k = document.createElement("div");
+      k.className = "stat-k";
+      k.textContent = label;
+      const v = document.createElement("div");
+      v.className = "stat-v";
+      v.textContent = value;
+      item.append(k, v);
+      els.journeySummaryGrid.appendChild(item);
+    }
+    els.journeySummaryPanel.hidden = false;
+  }
+
+  function renderStepBreakdownTable(steps, isFinal) {
+    if (!els.stepBreakdownPanel || !els.stepTableBody) return;
+    if (!Array.isArray(steps) || steps.length === 0) {
+      els.stepBreakdownPanel.hidden = true;
+      return;
+    }
+
+    if (els.stepBreakdownMeta) {
+      els.stepBreakdownMeta.textContent = `${steps.length} step${steps.length === 1 ? "" : "s"}`;
+    }
+    els.stepTableBody.replaceChildren();
+
+    for (const step of steps) {
+      const tr = document.createElement("tr");
+      const thName = document.createElement("th");
+      thName.scope = "row";
+      thName.textContent = step.step_name || step.step_id;
+
+      const tdOrder = document.createElement("td");
+      tdOrder.className = "mono";
+      tdOrder.textContent = `#${step.order_number}`;
+
+      const tdMethod = document.createElement("td");
+      tdMethod.className = "mono";
+      tdMethod.textContent = step.method || "GET";
+
+      const tdTarget = document.createElement("td");
+      tdTarget.className = "mono";
+      tdTarget.textContent = step.target_preview || "--";
+
+      const tdReqs = document.createElement("td");
+      tdReqs.textContent = formatNumber(step.total_requests || 0);
+
+      const rpsVal = isFinal ? step.requests_per_sec : step.avg_rps;
+      const tdRps = document.createElement("td");
+      tdRps.textContent = `${Number(rpsVal || 0).toFixed(1)}`;
+
+      const lat = isFinal ? step.latencies : step.window_latency_ms;
+      const p50 = lat ? (isFinal ? lat.p50_ms : lat.p50) : 0;
+      const p95 = lat ? (isFinal ? lat.p95_ms : lat.p95) : 0;
+      const p99 = lat ? (isFinal ? lat.p99_ms : lat.p99) : 0;
+
+      const tdP50 = document.createElement("td");
+      tdP50.textContent = formatMs(p50);
+
+      const tdP95 = document.createElement("td");
+      tdP95.textContent = formatMs(p95);
+
+      const tdP99 = document.createElement("td");
+      tdP99.textContent = formatMs(p99);
+
+      const errs = isFinal
+        ? Math.max(0, (step.total_requests || 0) - (step.successful_requests || 0) - (step.other_statuses || 0))
+        : step.error_count || 0;
+      const tdErrAbort = document.createElement("td");
+      tdErrAbort.className = "mono";
+      tdErrAbort.textContent = `${formatNumber(errs)} / ${formatNumber(step.aborted_iterations || 0)}`;
+
+      tr.append(thName, tdOrder, tdMethod, tdTarget, tdReqs, tdRps, tdP50, tdP95, tdP99, tdErrAbort);
+      els.stepTableBody.appendChild(tr);
+    }
+
+    els.stepBreakdownPanel.hidden = false;
   }
 
   function resetTelemetryDisplay() {
@@ -471,6 +733,8 @@
     els.runProgressFill.style.inlineSize = "0%";
     els.finalSummaryPanel.hidden = true;
     els.finalSummaryGrid.replaceChildren();
+    renderJourneySummary(null, false);
+    renderStepBreakdownTable(null, false);
     renderStatusTable({}, 0);
     renderErrorTable({}, 0);
     drawAllCharts();
@@ -486,8 +750,8 @@
     els.kpiTotalReqs.textContent = formatNumber(snap.total_requests);
     els.kpiTotalBytes.textContent = `Transferred: ${formatBytes(snap.total_bytes)}`;
 
-    const totalErrors = snap.client_errors + snap.server_errors + snap.transport_errors;
     const total = snap.total_requests || 0;
+    const totalErrors = Math.max(0, total - (snap.successful_requests || 0) - (snap.other_statuses || 0));
     const successPct = total > 0 ? (snap.successful_requests / total) * 100 : 100;
     const errorPct = total > 0 ? (totalErrors / total) * 100 : 0;
 
@@ -512,6 +776,8 @@
       syncRunButtonsForPhase(snap.phase);
     }
 
+    renderJourneySummary(snap.journey_snapshot, false);
+    renderStepBreakdownTable(snap.step_snapshots, false);
     renderStatusTable(snap.status_distribution, snap.total_requests);
     renderErrorTable(snap.error_breakdown, snap.total_requests);
   }
@@ -619,8 +885,8 @@
     els.kpiTransferRate.textContent = formatRate(stats.bytes_per_sec);
     els.kpiActiveVus.textContent = `0 / ${state.meta ? state.meta.concurrency : 0}`;
 
-    const totalErrors = stats.client_errors + stats.server_errors + stats.transport_errors;
     const total = stats.total_requests || 0;
+    const totalErrors = Math.max(0, total - (stats.successful_requests || 0) - (stats.other_statuses || 0));
     const successPct = total > 0 ? (stats.successful_requests / total) * 100 : 100;
     const errorPct = total > 0 ? (totalErrors / total) * 100 : 0;
     els.kpiSuccessRate.textContent = `${successPct.toFixed(2)}%`;
@@ -632,6 +898,10 @@
 
     renderStatusTable(stats.status_distribution, stats.total_requests);
     renderErrorTable(stats.error_breakdown, stats.total_requests);
+    if (stats.scenario_stats) {
+      renderJourneySummary(stats.scenario_stats.journeys, true);
+      renderStepBreakdownTable(stats.scenario_stats.steps, true);
+    }
 
     const lat = stats.latencies;
     const summaryItems = [
@@ -1294,28 +1564,37 @@
 
   function validateFormBoundsClient() {
     if (!els.configForm) return true;
-    FormValidationController.setFieldError(els.cfgUrl, "");
     FormValidationController.setFieldError(els.cfgDuration, "");
     FormValidationController.setFieldError(els.cfgRampUp, "");
     FormValidationController.setFieldError(els.cfgTimeout, "");
-    FormValidationController.setFieldError(els.cfgBodyFile, "");
+    if (els.cfgUrl) FormValidationController.setFieldError(els.cfgUrl, "");
+    if (els.cfgBodyFile) FormValidationController.setFieldError(els.cfgBodyFile, "");
 
-    const rawUrl = els.cfgUrl.value.trim();
-    if (!rawUrl) {
-      FormValidationController.setFieldError(els.cfgUrl, "Enter a target URL.");
-    } else {
-      try {
-        const parsed = new URL(rawUrl);
-        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (state.configMode === "single") {
+      const rawUrl = els.cfgUrl.value.trim();
+      if (!rawUrl) {
+        FormValidationController.setFieldError(els.cfgUrl, "Enter a target URL.");
+      } else {
+        try {
+          const parsed = new URL(rawUrl);
+          if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            FormValidationController.setFieldError(
+              els.cfgUrl,
+              "Only http and https URLs are supported."
+            );
+          }
+        } catch (_) {
           FormValidationController.setFieldError(
             els.cfgUrl,
-            "Only http and https URLs are supported."
+            "Enter a valid HTTP or HTTPS URL."
           );
         }
-      } catch (_) {
+      }
+
+      if (state.bodyMode === "file" && !els.cfgBodyFile.value.trim()) {
         FormValidationController.setFieldError(
-          els.cfgUrl,
-          "Enter a valid HTTP or HTTPS URL."
+          els.cfgBodyFile,
+          "Select or enter a payload file path."
         );
       }
     }
@@ -1349,11 +1628,8 @@
       );
     }
 
-    if (state.bodyMode === "file" && !els.cfgBodyFile.value.trim()) {
-      FormValidationController.setFieldError(
-        els.cfgBodyFile,
-        "Select or enter a payload file path."
-      );
+    if (state.configMode === "sequence") {
+      return durMs !== null && durMs > 0 && timeoutMs !== null && timeoutMs > 0 && rampMs !== null && rampMs <= durMs;
     }
 
     return els.configForm.checkValidity();
@@ -1512,19 +1788,111 @@
     els.bodyRawBytes.textContent = formatBytes(bytes);
   }
 
+  function serializeScenarioPayload() {
+    const sc = state.scenario || {};
+    return {
+      schema_version: 1,
+      name: (sc.name || "").trim() || null,
+      base_url: (sc.base_url || "").trim() || null,
+      default_headers: (sc.default_headers || [])
+        .filter((h) => h.name.trim().length > 0 || h.value.trim().length > 0)
+        .map((h) => ({
+          name: h.name,
+          value: h.value,
+          enabled: h.enabled !== false,
+        })),
+      initial_variables: (sc.initial_variables || [])
+        .filter((v) => v.name.trim().length > 0 || v.value.length > 0)
+        .map((v) => ({
+          name: v.name.trim(),
+          value: v.value,
+          sensitive: Boolean(v.sensitive),
+        })),
+      steps: (sc.steps || []).map((st) => ({
+        id: st.id,
+        name: st.name,
+        enabled: st.enabled !== false,
+        method: st.method || "GET",
+        url: st.url || "",
+        headers: (st.headers || [])
+          .filter((h) => h.name.trim().length > 0 || h.value.trim().length > 0)
+          .map((h) => ({
+            name: h.name,
+            value: h.value,
+            enabled: h.enabled !== false,
+          })),
+        body_mode: st.body_mode || "none",
+        body: st.body_mode === "raw" ? st.body || "" : null,
+        body_file: st.body_mode === "file" ? (st.body_file || "").trim() || null : null,
+        timeout: (st.timeout || "").trim() || null,
+        think_time: (st.think_time || "").trim() || null,
+        extractors: (st.extractors || [])
+          .filter((ex) => ex.name.trim().length > 0)
+          .map((ex) => ({
+            name: ex.name.trim(),
+            source: ex.source,
+            required: ex.required !== false,
+            sensitive: Boolean(ex.sensitive),
+          })),
+        assertions: {
+          status: st.assertions?.status || { type: "any_2xx" },
+          json_checks: (st.assertions?.json_checks || [])
+            .filter((chk) => chk.path.trim().length > 0)
+            .map((chk) => {
+              const item = {
+                path: chk.path.trim(),
+                op: chk.op || "exists",
+              };
+              if (item.op === "equals") {
+                item.expected = chk.expected_raw !== undefined ? parseExpectedJsonValue(chk.expected_raw) : chk.expected ?? null;
+              }
+              return item;
+            }),
+        },
+        on_failure: st.on_failure || "abort_iteration",
+      })),
+    };
+  }
+
   function readFormConfig() {
     const outJson = els.cfgOutputJson?.value.trim() || null;
     const outCsv = els.cfgOutputCsv?.value.trim() || null;
     const outPdf = els.cfgOutputPdf?.value.trim() || null;
+    const concurrency = Math.max(1, Number(els.cfgConcurrency.value || 50));
+    const duration = els.cfgDuration.value.trim();
+    const rampUp = els.cfgRampUp.value.trim();
+    const timeout = els.cfgTimeout.value.trim();
+
+    if (state.configMode === "sequence") {
+      return {
+        mode: "sequence",
+        url: "",
+        method: "GET",
+        concurrency,
+        duration,
+        ramp_up: rampUp,
+        timeout,
+        headers: [],
+        body_mode: "none",
+        body: null,
+        body_file: null,
+        output_json: outJson,
+        output_csv: outCsv,
+        output_pdf: outPdf,
+        scenario: serializeScenarioPayload(),
+      };
+    }
+
     const bodyFile = els.cfgBodyFile?.value.trim() || null;
     const bodyRaw = els.cfgBodyRaw?.value || "";
     return {
+      mode: "single",
       url: els.cfgUrl.value.trim(),
       method: els.cfgMethod.value,
-      concurrency: Math.max(1, Number(els.cfgConcurrency.value || 700)),
-      duration: els.cfgDuration.value.trim(),
-      ramp_up: els.cfgRampUp.value.trim(),
-      timeout: els.cfgTimeout.value.trim(),
+      concurrency,
+      duration,
+      ramp_up: rampUp,
+      timeout,
       headers: state.headers
         .filter((h) => h.name.trim().length > 0 || h.value.trim().length > 0)
         .map((h) => ({
@@ -1538,14 +1906,16 @@
       output_json: outJson,
       output_csv: outCsv,
       output_pdf: outPdf,
+      scenario: null,
     };
   }
 
   function populateFormConfig(cfg, presetId = null, dirty = false) {
     const c = cfg || {};
+    const isSeq = c.mode === "sequence" || Boolean(c.scenario);
     els.cfgMethod.value = String(c.method || "GET").toUpperCase();
     els.cfgUrl.value = c.url || "";
-    els.cfgConcurrency.value = String(c.concurrency || 700);
+    els.cfgConcurrency.value = String(c.concurrency || 50);
     els.cfgDuration.value = c.duration || "30s";
     els.cfgRampUp.value = c.ramp_up || "0s";
     els.cfgTimeout.value = c.timeout || "5000ms";
@@ -1570,6 +1940,14 @@
     renderHeaderRows();
     setBodyMode(c.body_mode || "none", false);
     updateRawBodyByteCount();
+
+    if (isSeq) {
+      hydrateScenarioIntoState(c.scenario || null);
+      setConfigMode("sequence");
+    } else {
+      setConfigMode("single");
+    }
+    syncStudioWorkloadInputs();
     updateOsWarningBanner();
 
     state.selectedPresetId = presetId;
@@ -1586,41 +1964,53 @@
   }
 
   function renderPresetSelect() {
-    if (!els.presetSelect) return;
+    const targets = [els.presetSelect, els.studioPresetSelect].filter(Boolean);
+    if (targets.length === 0) return;
     const prevValue = state.selectedPresetId ? `preset:${state.selectedPresetId}` : "";
-    els.presetSelect.replaceChildren();
 
-    const defaultOpt = document.createElement("option");
-    defaultOpt.value = "";
-    defaultOpt.textContent = "-- Custom / Unsaved Configuration --";
-    els.presetSelect.appendChild(defaultOpt);
+    for (const selectEl of targets) {
+      selectEl.replaceChildren();
+      const defaultOpt = document.createElement("option");
+      defaultOpt.value = "";
+      defaultOpt.textContent = "-- Custom / Unsaved Configuration --";
+      selectEl.appendChild(defaultOpt);
 
-    if (state.presets.length > 0) {
-      const grp = document.createElement("optgroup");
-      grp.label = "Saved Presets";
-      for (const preset of state.presets) {
-        const opt = document.createElement("option");
-        opt.value = `preset:${preset.id}`;
-        opt.textContent = `${preset.name} (${preset.config.method} ${preset.config.concurrency} VUs)`;
-        grp.appendChild(opt);
+      if (state.presets.length > 0) {
+        const grp = document.createElement("optgroup");
+        grp.label = "Saved Presets";
+        for (const preset of state.presets) {
+          const opt = document.createElement("option");
+          opt.value = `preset:${preset.id}`;
+          const isSeq = preset.config?.mode === "sequence" || Boolean(preset.config?.scenario);
+          const tag = isSeq
+            ? `Sequence ${(preset.config.scenario?.steps || []).length} steps`
+            : preset.config.method;
+          opt.textContent = `${preset.name} (${tag}, ${preset.config.concurrency} VUs)`;
+          grp.appendChild(opt);
+        }
+        selectEl.appendChild(grp);
       }
-      els.presetSelect.appendChild(grp);
+
+      if (state.recent.length > 0) {
+        const grp = document.createElement("optgroup");
+        grp.label = "Recent Runs";
+        for (const rec of state.recent) {
+          const opt = document.createElement("option");
+          opt.value = `recent:${rec.id}`;
+          const label = rec.preset_name ? `[${rec.preset_name}] ` : "";
+          const isSeq = rec.config?.mode === "sequence" || Boolean(rec.config?.scenario);
+          const desc = isSeq
+            ? `${rec.config.scenario?.name || "Sequence"} (${(rec.config.scenario?.steps || []).length} steps)`
+            : `${rec.config.method} ${rec.config.url}`;
+          opt.textContent = `${label}${desc} (${rec.config.concurrency} VUs)`;
+          grp.appendChild(opt);
+        }
+        selectEl.appendChild(grp);
+      }
+
+      selectEl.value = prevValue;
     }
 
-    if (state.recent.length > 0) {
-      const grp = document.createElement("optgroup");
-      grp.label = "Recent Runs";
-      for (const rec of state.recent) {
-        const opt = document.createElement("option");
-        opt.value = `recent:${rec.id}`;
-        const label = rec.preset_name ? `[${rec.preset_name}] ` : "";
-        opt.textContent = `${label}${rec.config.method} ${rec.config.url} (${rec.config.concurrency} VUs)`;
-        grp.appendChild(opt);
-      }
-      els.presetSelect.appendChild(grp);
-    }
-
-    els.presetSelect.value = prevValue;
     if (els.presetDeleteBtn) {
       els.presetDeleteBtn.disabled = !state.selectedPresetId;
     }
@@ -1634,9 +2024,15 @@
     if (els.chooseBodyFileBtn) {
       els.chooseBodyFileBtn.hidden = !state.system.native_dialogs;
     }
+    if (els.stepChooseBodyFileBtn) {
+      els.stepChooseBodyFileBtn.hidden = !state.system.native_dialogs;
+    }
 
     if (state.system.initial_config) {
       populateFormConfig(state.system.initial_config, null, true);
+      if (state.configMode === "sequence") {
+        setWorkspaceView("studio");
+      }
     } else {
       updateOsWarningBanner();
     }
@@ -1951,9 +2347,18 @@
         if (data.validation && data.validation.field_errors) {
           applyServerFieldErrors(data.validation.field_errors);
         }
+        const errText = data.error || `Failed to start run (${resp.status})`;
         if (els.configFormError) {
-          els.configFormError.textContent = data.error || `Failed to start run (${resp.status})`;
+          els.configFormError.textContent = errText;
           els.configFormError.hidden = false;
+        }
+        if (state.activeView === "studio" && els.studioValidationBanner) {
+          const firstFieldErr = data.validation?.field_errors
+            ? Object.values(data.validation.field_errors)[0]
+            : null;
+          els.studioValidationBanner.textContent = firstFieldErr ? `${errText}: ${firstFieldErr}` : errText;
+          els.studioValidationBanner.classList.add("notice-error");
+          els.studioValidationBanner.hidden = false;
         }
         syncRunButtonsForPhase(state.meta?.phase || "idle");
         return;
@@ -1962,6 +2367,9 @@
       if (state.viewingRunId) {
         state.viewingRunId = null;
         if (els.returnLiveBtn) els.returnLiveBtn.hidden = true;
+      }
+      if (state.activeView === "studio") {
+        setWorkspaceView("monitor");
       }
       state.activeRunId = data.run_id;
       await fetchPresets().catch(() => {});
@@ -2874,6 +3282,2042 @@
     }
   }
 
+  let lastFocusedStepInput = null;
+
+  function parseExpectedJsonValue(raw) {
+    const trimmed = String(raw ?? "").trim();
+    if (!trimmed) return "";
+    try {
+      return JSON.parse(trimmed);
+    } catch (_) {
+      return trimmed;
+    }
+  }
+
+  function formatExpectedJsonValue(val) {
+    if (val === undefined || val === null) return "";
+    return typeof val === "string" ? val : JSON.stringify(val);
+  }
+
+  function createDefaultStep(index) {
+    const seq = Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 5);
+    return {
+      id: `step_${index + 1}_${seq}`,
+      name: `Step ${index + 1}`,
+      enabled: true,
+      method: "GET",
+      url: index === 0 ? "/v1/auth/login" : "/v1/resource",
+      headers: [],
+      body_mode: "none",
+      body: "",
+      body_file: "",
+      timeout: "",
+      think_time: "",
+      extractors: [],
+      assertions: {
+        status: { type: "any_2xx" },
+        json_checks: [],
+      },
+      on_failure: "abort_iteration",
+    };
+  }
+
+  function hydrateScenarioIntoState(rawScenario) {
+    const sc = rawScenario || {};
+    const steps = Array.isArray(sc.steps)
+      ? sc.steps.map((st, idx) => ({
+          id: st.id || `step_${idx + 1}`,
+          name: st.name || `Step ${idx + 1}`,
+          enabled: st.enabled !== false,
+          method: String(st.method || "GET").toUpperCase(),
+          url: st.url || "",
+          headers: Array.isArray(st.headers)
+            ? st.headers.map((h) => ({
+                name: h.name || "",
+                value: h.value || "",
+                enabled: h.enabled !== false,
+                _revealed: false,
+              }))
+            : [],
+          body_mode: st.body_mode || "none",
+          body: st.body || "",
+          body_file: st.body_file || "",
+          timeout: st.timeout || "",
+          think_time: st.think_time || "",
+          extractors: Array.isArray(st.extractors)
+            ? st.extractors.map((ex) => ({
+                name: ex.name || "",
+                source: normalizeExtractorSource(ex.source),
+                required: ex.required !== false,
+                sensitive: Boolean(ex.sensitive),
+              }))
+            : [],
+          assertions: {
+            status: normalizeStatusExpectation(st.assertions?.status),
+            json_checks: Array.isArray(st.assertions?.json_checks)
+              ? st.assertions.json_checks.map((chk) => ({
+                  path: chk.path || "",
+                  op: chk.op || "exists",
+                  expected: chk.expected ?? null,
+                  expected_raw: formatExpectedJsonValue(chk.expected),
+                }))
+              : [],
+          },
+          on_failure: st.on_failure || "abort_iteration",
+        }))
+      : [createDefaultStep(0)];
+
+    state.scenario = {
+      schema_version: 1,
+      name: sc.name || "",
+      base_url: sc.base_url || "",
+      default_headers: Array.isArray(sc.default_headers)
+        ? sc.default_headers.map((h) => ({
+            name: h.name || "",
+            value: h.value || "",
+            enabled: h.enabled !== false,
+            _revealed: false,
+          }))
+        : [],
+      initial_variables: Array.isArray(sc.initial_variables)
+        ? sc.initial_variables.map((v) => ({
+            name: v.name || "",
+            value: v.value || "",
+            sensitive: Boolean(v.sensitive),
+            _revealed: false,
+          }))
+        : [],
+      steps,
+    };
+
+    if (!steps.some((s) => s.id === state.selectedStepId)) {
+      state.selectedStepId = steps[0]?.id || null;
+    }
+    state.studioReview = null;
+    state.dryRunReport = null;
+    renderStudioAll();
+    renderSidebarSequenceSummary();
+  }
+
+  function normalizeExtractorSource(src) {
+    if (!src || !src.type) return { type: "json_path", path: "$.data" };
+    if (src.type === "json_path") return { type: "json_path", path: src.path || "" };
+    if (src.type === "header") return { type: "header", name: src.name || "" };
+    if (src.type === "cookie") return { type: "cookie", name: src.name || "" };
+    return { type: "status_code" };
+  }
+
+  function normalizeStatusExpectation(st) {
+    if (!st || !st.type) return { type: "any_2xx" };
+    if (st.type === "exact") {
+      return { type: "exact", codes: Array.isArray(st.codes) ? st.codes.slice() : [200] };
+    }
+    if (st.type === "range") {
+      return { type: "range", min: Number(st.min || 200), max: Number(st.max || 299) };
+    }
+    if (st.type === "any") return { type: "any" };
+    return { type: "any_2xx" };
+  }
+
+  function syncStudioWorkloadInputs() {
+    if (els.studioConcurrency && els.cfgConcurrency) {
+      els.studioConcurrency.value = els.cfgConcurrency.value;
+    }
+    if (els.studioDuration && els.cfgDuration) {
+      els.studioDuration.value = els.cfgDuration.value;
+    }
+    if (els.studioRampUp && els.cfgRampUp) {
+      els.studioRampUp.value = els.cfgRampUp.value;
+    }
+    if (els.studioTimeout && els.cfgTimeout) {
+      els.studioTimeout.value = els.cfgTimeout.value;
+    }
+  }
+
+  function setConfigMode(mode) {
+    state.configMode = mode === "sequence" ? "sequence" : "single";
+    const isSeq = state.configMode === "sequence";
+    if (els.singleModeFields) els.singleModeFields.hidden = isSeq;
+    if (els.singleModeRequestDetails) els.singleModeRequestDetails.hidden = isSeq;
+    if (els.sequenceSidebarSummary) els.sequenceSidebarSummary.hidden = !isSeq;
+    if (els.navStepCount) {
+      const count = (state.scenario.steps || []).filter((s) => s.enabled !== false).length;
+      els.navStepCount.textContent = String(count);
+      els.navStepCount.hidden = !isSeq && count === 0;
+    }
+    if (isSeq) {
+      renderSidebarSequenceSummary();
+    }
+  }
+
+  function setWorkspaceView(view) {
+    const next = view === "studio" ? "studio" : "monitor";
+    state.activeView = next;
+    const isStudio = next === "studio";
+    if (els.workspaceLayout) els.workspaceLayout.hidden = isStudio;
+    if (els.sequenceStudioView) els.sequenceStudioView.hidden = !isStudio;
+    if (els.toggleSidebarBtn) {
+      els.toggleSidebarBtn.hidden = state.mode !== "interactive" || isStudio;
+    }
+    if (els.navLiveMonitor) {
+      if (isStudio) els.navLiveMonitor.removeAttribute("aria-current");
+      else els.navLiveMonitor.setAttribute("aria-current", "page");
+    }
+    if (els.navSequenceStudio) {
+      if (isStudio) els.navSequenceStudio.setAttribute("aria-current", "page");
+      else els.navSequenceStudio.removeAttribute("aria-current");
+    }
+    if (isStudio) {
+      if (state.configMode !== "sequence") {
+        setConfigMode("sequence");
+        if (!state.scenario.steps || state.scenario.steps.length === 0) {
+          hydrateScenarioIntoState(null);
+        }
+      }
+      syncStudioWorkloadInputs();
+      renderStudioAll();
+    } else {
+      drawAllCharts();
+    }
+  }
+
+  function toggleStudioReadOnly(running) {
+    if (els.studioActiveBanner) {
+      els.studioActiveBanner.hidden = !running;
+    }
+    if (!els.sequenceStudioView) return;
+    const controls = els.sequenceStudioView.querySelectorAll(
+      "input, select, textarea, button:not([role='tab'])"
+    );
+    controls.forEach((ctrl) => {
+      if (
+        ctrl.id === "studio-refresh-review-btn" ||
+        ctrl.id === "studio-copy-cli-btn" ||
+        ctrl.id === "studio-export-btn"
+      ) {
+        return;
+      }
+      ctrl.disabled = running;
+    });
+  }
+
+  function convertSingleToSequence() {
+    const rawUrl = (els.cfgUrl?.value || "").trim();
+    let baseUrl = "";
+    let stepUrl = rawUrl || "/v1/ping";
+    if (rawUrl) {
+      try {
+        const parsed = new URL(rawUrl);
+        baseUrl = parsed.origin;
+        stepUrl = `${parsed.pathname || "/"}${parsed.search || ""}`;
+      } catch (_) {
+        stepUrl = rawUrl;
+      }
+    }
+
+    const step1 = {
+      id: "step_1_request",
+      name: "Step 1",
+      enabled: true,
+      method: els.cfgMethod?.value || "GET",
+      url: stepUrl,
+      headers: state.headers.map((h) => ({ ...h })),
+      body_mode: state.bodyMode || "none",
+      body: els.cfgBodyRaw?.value || "",
+      body_file: els.cfgBodyFile?.value || "",
+      timeout: "",
+      think_time: "",
+      extractors: [],
+      assertions: { status: { type: "any_2xx" }, json_checks: [] },
+      on_failure: "abort_iteration",
+    };
+
+    hydrateScenarioIntoState({
+      schema_version: 1,
+      name: "API Sequence",
+      base_url: baseUrl,
+      default_headers: [],
+      initial_variables: [],
+      steps: [step1],
+    });
+    setConfigMode("sequence");
+    setWorkspaceView("studio");
+    markFormDirty(true);
+    if (els.formLiveAnnouncer) {
+      els.formLiveAnnouncer.textContent = "Converted single request into Step 1 of an ordered sequence.";
+    }
+  }
+
+  function renderSidebarSequenceSummary() {
+    if (!els.sequenceSidebarSummary) return;
+    const steps = state.scenario.steps || [];
+    const enabledCount = steps.filter((s) => s.enabled !== false).length;
+    if (els.sidebarSeqTitle) {
+      els.sidebarSeqTitle.textContent =
+        (state.scenario.name || "").trim() || `Ordered Sequence (${enabledCount} steps)`;
+    }
+    if (els.navStepCount) {
+      els.navStepCount.textContent = String(enabledCount);
+      els.navStepCount.hidden = state.configMode !== "sequence";
+    }
+    if (els.sidebarSeqStatus) {
+      els.sidebarSeqStatus.className = "badge";
+      if (!state.studioReview) {
+        els.sidebarSeqStatus.textContent = `${enabledCount} step${enabledCount === 1 ? "" : "s"}`;
+        els.sidebarSeqStatus.classList.add("badge-idle");
+      } else if (state.studioReview.valid) {
+        els.sidebarSeqStatus.textContent = "Valid";
+        els.sidebarSeqStatus.classList.add("badge-running");
+      } else {
+        els.sidebarSeqStatus.textContent = "Needs Fix";
+        els.sidebarSeqStatus.classList.add("badge-failed");
+      }
+    }
+    if (els.sidebarStepChain) {
+      els.sidebarStepChain.replaceChildren();
+      steps.forEach((step, idx) => {
+        const li = document.createElement("li");
+        li.className = `sidebar-step-pill${step.enabled === false ? " is-disabled" : ""}`;
+        const m = document.createElement("span");
+        m.className = "mono";
+        m.textContent = `${idx + 1}. ${step.method}`;
+        const n = document.createElement("span");
+        n.textContent = step.name || `Step ${idx + 1}`;
+        li.append(m, n);
+        els.sidebarStepChain.appendChild(li);
+      });
+    }
+  }
+
+  function computeLocalStepDataflow() {
+    const steps = state.scenario.steps || [];
+    const available = new Set(["__vu_id", "__iteration", "__timestamp_ms"]);
+    for (const v of state.scenario.initial_variables || []) {
+      const n = (v.name || "").trim();
+      if (n) available.add(n);
+    }
+
+    const extractRefs = (text) => {
+      const refs = [];
+      const seen = new Set();
+      const re = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
+      let m;
+      while ((m = re.exec(String(text || ""))) !== null) {
+        if (!seen.has(m[1])) {
+          seen.add(m[1]);
+          refs.push(m[1]);
+        }
+      }
+      return refs;
+    };
+
+    const flowById = new Map();
+    for (const step of steps) {
+      const inSet = new Set();
+      for (const v of extractRefs(step.url)) inSet.add(v);
+      for (const h of state.scenario.default_headers || []) {
+        if (h.enabled !== false) {
+          for (const v of extractRefs(h.value)) inSet.add(v);
+        }
+      }
+      for (const h of step.headers || []) {
+        if (h.enabled !== false) {
+          for (const v of extractRefs(h.value)) inSet.add(v);
+        }
+      }
+      if (step.body_mode === "raw") {
+        for (const v of extractRefs(step.body)) inSet.add(v);
+      }
+      const consumes = Array.from(inSet);
+      const unresolved =
+        step.enabled === false ? [] : consumes.filter((name) => !available.has(name));
+      const produces = (step.extractors || [])
+        .map((ex) => (ex.name || "").trim())
+        .filter(Boolean);
+      if (step.enabled !== false) {
+        for (const p of produces) available.add(p);
+      }
+      flowById.set(step.id, { consumes, produces, unresolved });
+    }
+    return flowById;
+  }
+
+  function reorderDomNodes(container, orderedNodes) {
+    const move = Object.hasOwn(Element.prototype, "moveBefore")
+      ? (node) => container.moveBefore(node, null)
+      : (node) => container.append(node);
+    const apply = () => {
+      for (const node of orderedNodes) move(node);
+    };
+    if (container.startViewTransition) {
+      container.startViewTransition(apply);
+    } else if (document.startViewTransition) {
+      document.startViewTransition(apply);
+    } else {
+      apply();
+    }
+  }
+
+  function updatePipelineCardInPlace(li, step, idx, total, flow) {
+    li.dataset.stepId = step.id;
+    const card = li.querySelector(".pipeline-card");
+    const orderBadge = li.querySelector(".pipeline-order-badge");
+    const methodBadge = li.querySelector(".pipeline-method");
+    const nameEl = li.querySelector(".pipeline-step-name");
+    const enableCb = li.querySelector(".pipeline-enable-cb");
+    const targetEl = li.querySelector(".pipeline-target");
+    const badgesEl = li.querySelector(".pipeline-badges-row");
+    const upBtn = li.querySelector('[data-action="up"]');
+    const downBtn = li.querySelector('[data-action="down"]');
+    const connEl = li.querySelector(".pipeline-connector");
+
+    if (card) {
+      card.classList.toggle("is-selected", step.id === state.selectedStepId);
+      card.classList.toggle("is-disabled", step.enabled === false);
+      card.style.viewTransitionName = "match-element";
+    }
+    if (orderBadge) orderBadge.textContent = `#${idx + 1}`;
+    if (methodBadge) methodBadge.textContent = step.method || "GET";
+    if (nameEl) nameEl.textContent = step.name || `Step ${idx + 1}`;
+    if (enableCb) {
+      enableCb.checked = step.enabled !== false;
+      enableCb.setAttribute("aria-label", `Enable step ${idx + 1}: ${step.name || ""}`);
+    }
+    if (targetEl) targetEl.textContent = step.url || "(empty path)";
+
+    if (badgesEl) {
+      badgesEl.replaceChildren();
+      const policyPill = document.createElement("span");
+      policyPill.className = "flow-pill";
+      policyPill.textContent = step.on_failure === "continue" ? "continue" : "abort";
+      badgesEl.appendChild(policyPill);
+
+      for (const v of flow.consumes.slice(0, 3)) {
+        const pill = document.createElement("span");
+        const isErr = flow.unresolved.includes(v);
+        pill.className = `flow-pill mono ${isErr ? "flow-pill-err" : "flow-pill-in"}`;
+        pill.textContent = isErr ? `missing: ${v}` : `in: ${v}`;
+        badgesEl.appendChild(pill);
+      }
+      for (const v of flow.produces.slice(0, 3)) {
+        const pill = document.createElement("span");
+        pill.className = "flow-pill mono flow-pill-out";
+        pill.textContent = `out: ${v}`;
+        badgesEl.appendChild(pill);
+      }
+    }
+
+    if (upBtn) upBtn.disabled = idx === 0;
+    if (downBtn) downBtn.disabled = idx === total - 1;
+    if (connEl) {
+      if (idx === total - 1) {
+        connEl.hidden = true;
+      } else {
+        connEl.hidden = false;
+        const think = (step.think_time || "").trim();
+        connEl.textContent = think && think !== "0ms" && think !== "0s" ? `↓ think ${think}` : "↓";
+      }
+    }
+  }
+
+  function createPipelineItemNode(step) {
+    const li = document.createElement("li");
+    li.className = "pipeline-item";
+    li.dataset.stepId = step.id;
+
+    const card = document.createElement("div");
+    card.className = "pipeline-card";
+    card.tabIndex = 0;
+
+    const top = document.createElement("div");
+    top.className = "pipeline-card-top";
+
+    const cluster = document.createElement("div");
+    cluster.className = "pipeline-title-cluster";
+    const orderBadge = document.createElement("span");
+    orderBadge.className = "pipeline-order-badge mono";
+    const methodBadge = document.createElement("span");
+    methodBadge.className = "method-pill pipeline-method";
+    const nameEl = document.createElement("span");
+    nameEl.className = "pipeline-step-name";
+    cluster.append(orderBadge, methodBadge, nameEl);
+
+    const enableCb = document.createElement("input");
+    enableCb.type = "checkbox";
+    enableCb.className = "pipeline-enable-cb";
+    enableCb.addEventListener("click", (e) => e.stopPropagation());
+    enableCb.addEventListener("change", () => {
+      const target = state.scenario.steps.find((s) => s.id === li.dataset.stepId);
+      if (!target) return;
+      target.enabled = enableCb.checked;
+      markFormDirty(true);
+      renderPipelineCards();
+      renderStepEditor();
+      renderSidebarSequenceSummary();
+    });
+    top.append(cluster, enableCb);
+
+    const targetEl = document.createElement("div");
+    targetEl.className = "pipeline-target mono";
+
+    const badgesEl = document.createElement("div");
+    badgesEl.className = "pipeline-badges-row";
+
+    const ctrlRow = document.createElement("div");
+    ctrlRow.className = "pipeline-controls-row";
+    const moveGroup = document.createElement("div");
+    moveGroup.className = "pipeline-btn-group";
+
+    const upBtn = document.createElement("button");
+    upBtn.type = "button";
+    upBtn.className = "btn btn-secondary btn-sm";
+    upBtn.dataset.action = "up";
+    upBtn.textContent = "↑";
+    upBtn.title = "Move step up";
+    upBtn.setAttribute("aria-label", "Move step up");
+    upBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const curIdx = state.scenario.steps.findIndex((s) => s.id === li.dataset.stepId);
+      if (curIdx > 0) moveStep(curIdx, -1, upBtn);
+    });
+
+    const downBtn = document.createElement("button");
+    downBtn.type = "button";
+    downBtn.className = "btn btn-secondary btn-sm";
+    downBtn.dataset.action = "down";
+    downBtn.textContent = "↓";
+    downBtn.title = "Move step down";
+    downBtn.setAttribute("aria-label", "Move step down");
+    downBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const curIdx = state.scenario.steps.findIndex((s) => s.id === li.dataset.stepId);
+      if (curIdx >= 0 && curIdx + 1 < state.scenario.steps.length) moveStep(curIdx, 1, downBtn);
+    });
+    moveGroup.append(upBtn, downBtn);
+
+    const actGroup = document.createElement("div");
+    actGroup.className = "pipeline-btn-group";
+
+    const dupBtn = document.createElement("button");
+    dupBtn.type = "button";
+    dupBtn.className = "btn btn-secondary btn-sm";
+    dupBtn.textContent = "Dup";
+    dupBtn.title = "Duplicate step";
+    dupBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const curIdx = state.scenario.steps.findIndex((s) => s.id === li.dataset.stepId);
+      if (curIdx < 0) return;
+      const orig = state.scenario.steps[curIdx];
+      const copy = JSON.parse(JSON.stringify(orig));
+      copy.id = `step_${Date.now().toString(36).slice(-4)}_${Math.random().toString(36).slice(2, 5)}`;
+      copy.name = `${orig.name} (Copy)`;
+      state.scenario.steps.splice(curIdx + 1, 0, copy);
+      state.selectedStepId = copy.id;
+      markFormDirty(true);
+      renderStudioAll();
+      renderSidebarSequenceSummary();
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "btn btn-secondary btn-sm";
+    delBtn.textContent = "×";
+    delBtn.title = "Remove step";
+    delBtn.setAttribute("aria-label", "Remove step");
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const curIdx = state.scenario.steps.findIndex((s) => s.id === li.dataset.stepId);
+      if (curIdx < 0) return;
+      state.scenario.steps.splice(curIdx, 1);
+      if (state.selectedStepId === li.dataset.stepId) {
+        const fallback = state.scenario.steps[Math.min(curIdx, state.scenario.steps.length - 1)];
+        state.selectedStepId = fallback ? fallback.id : null;
+      }
+      markFormDirty(true);
+      renderStudioAll();
+      renderSidebarSequenceSummary();
+    });
+    actGroup.append(dupBtn, delBtn);
+    ctrlRow.append(moveGroup, actGroup);
+
+    card.append(top, targetEl, badgesEl, ctrlRow);
+    card.addEventListener("click", () => {
+      state.selectedStepId = li.dataset.stepId;
+      renderPipelineCards();
+      renderStepEditor();
+      setStudioTab("edit");
+    });
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        state.selectedStepId = li.dataset.stepId;
+        renderPipelineCards();
+        renderStepEditor();
+      }
+    });
+
+    const conn = document.createElement("div");
+    conn.className = "pipeline-connector mono";
+    conn.setAttribute("aria-hidden", "true");
+    li.append(card, conn);
+    return li;
+  }
+
+  function moveStep(idx, delta, triggerBtn) {
+    const nextIdx = idx + delta;
+    const steps = state.scenario.steps;
+    if (nextIdx < 0 || nextIdx >= steps.length) return;
+    const [moved] = steps.splice(idx, 1);
+    steps.splice(nextIdx, 0, moved);
+
+    const existingById = new Map();
+    if (els.stepPipelineList) {
+      for (const child of Array.from(els.stepPipelineList.children)) {
+        if (child.dataset.stepId) existingById.set(child.dataset.stepId, child);
+      }
+      const orderedNodes = steps.map((s) => existingById.get(s.id)).filter(Boolean);
+      if (orderedNodes.length === steps.length) {
+        reorderDomNodes(els.stepPipelineList, orderedNodes);
+      }
+    }
+
+    renderPipelineCards();
+    renderStepEditor();
+    renderSidebarSequenceSummary();
+    markFormDirty(true);
+    if (triggerBtn && document.contains(triggerBtn)) {
+      triggerBtn.focus({ preventScroll: true });
+    }
+    if (els.formLiveAnnouncer) {
+      els.formLiveAnnouncer.textContent = `Moved step ${moved.name || moved.id} to position ${nextIdx + 1} of ${steps.length}.`;
+    }
+  }
+
+  function renderPipelineCards() {
+    if (!els.stepPipelineList) return;
+    const steps = state.scenario.steps || [];
+    const flowMap = computeLocalStepDataflow();
+    const enabledCount = steps.filter((s) => s.enabled !== false).length;
+    if (els.studioPipelineCount) {
+      els.studioPipelineCount.textContent = `${enabledCount}/${steps.length} enabled`;
+    }
+    if (els.navStepCount) {
+      els.navStepCount.textContent = String(enabledCount);
+      els.navStepCount.hidden = state.configMode !== "sequence";
+    }
+
+    const existingMap = new Map();
+    for (const child of Array.from(els.stepPipelineList.children)) {
+      existingMap.set(child.dataset.stepId, child);
+    }
+
+    const targetIds = new Set(steps.map((s) => s.id));
+    for (const [id, node] of existingMap.entries()) {
+      if (!targetIds.has(id)) {
+        node.remove();
+        existingMap.delete(id);
+      }
+    }
+
+    const orderedNodes = steps.map((step) => existingMap.get(step.id) || createPipelineItemNode(step));
+    orderedNodes.forEach((node, idx) => {
+      if (!node.parentElement) {
+        els.stepPipelineList.appendChild(node);
+      }
+      const step = steps[idx];
+      const flow = flowMap.get(step.id) || { consumes: [], produces: [], unresolved: [] };
+      updatePipelineCardInPlace(node, step, idx, steps.length, flow);
+    });
+  }
+
+  function getSelectedStep() {
+    return (state.scenario.steps || []).find((s) => s.id === state.selectedStepId) || null;
+  }
+
+  function insertTextAtCursor(el, text) {
+    if (!el) return;
+    const start = typeof el.selectionStart === "number" ? el.selectionStart : el.value.length;
+    const end = typeof el.selectionEnd === "number" ? el.selectionEnd : el.value.length;
+    const before = el.value.slice(0, start);
+    const after = el.value.slice(end);
+    el.value = `${before}${text}${after}`;
+    el.focus();
+    const pos = start + text.length;
+    if (typeof el.setSelectionRange === "function") {
+      el.setSelectionRange(pos, pos);
+    }
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function renderVarChips() {
+    if (!els.stepVarChips) return;
+    els.stepVarChips.replaceChildren();
+    const label = document.createElement("span");
+    label.className = "var-chip-label";
+    label.textContent = "Insert {{var}}:";
+    els.stepVarChips.appendChild(label);
+
+    const step = getSelectedStep();
+    const stepIdx = step ? state.scenario.steps.indexOf(step) : -1;
+    const available = [];
+    const seen = new Set();
+    const addVar = (name, sourceTag) => {
+      const trimmed = String(name || "").trim();
+      if (!trimmed || seen.has(trimmed)) return;
+      seen.add(trimmed);
+      available.push({ name: trimmed, sourceTag });
+    };
+
+    for (const v of state.scenario.initial_variables || []) {
+      addVar(v.name, "init");
+    }
+    for (let i = 0; i < stepIdx; i += 1) {
+      const prev = state.scenario.steps[i];
+      if (prev.enabled === false) continue;
+      for (const ex of prev.extractors || []) {
+        addVar(ex.name, `#${i + 1}`);
+      }
+    }
+    addVar("__vu_id", "built-in");
+    addVar("__iteration", "built-in");
+    addVar("__timestamp_ms", "built-in");
+
+    for (const item of available) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "var-chip-btn";
+      btn.textContent = `{{${item.name}}}`;
+      btn.title = `Insert {{${item.name}}} (${item.sourceTag})`;
+      btn.addEventListener("click", () => {
+        const target =
+          lastFocusedStepInput && document.contains(lastFocusedStepInput)
+            ? lastFocusedStepInput
+            : els.stepUrlInput;
+        insertTextAtCursor(target, `{{${item.name}}}`);
+      });
+      els.stepVarChips.appendChild(btn);
+    }
+  }
+
+  function renderStudioDefaultHeaders() {
+    if (!els.studioDefaultHeadersList) return;
+    els.studioDefaultHeadersList.replaceChildren();
+    const list = state.scenario.default_headers || [];
+    list.forEach((entry, idx) => {
+      const row = document.createElement("div");
+      row.className = "header-row";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = entry.enabled !== false;
+      cb.addEventListener("change", () => {
+        entry.enabled = cb.checked;
+        markFormDirty(true);
+        renderInheritedHeaders();
+      });
+
+      const nameIn = document.createElement("input");
+      nameIn.type = "text";
+      nameIn.className = "control-input mono";
+      nameIn.placeholder = "Header-Name";
+      nameIn.value = entry.name || "";
+
+      const valIn = document.createElement("input");
+      valIn.className = "control-input mono";
+      valIn.placeholder = "Value";
+      valIn.value = entry.value || "";
+
+      const revBtn = document.createElement("button");
+      revBtn.type = "button";
+      revBtn.className = "btn btn-secondary btn-sm";
+      const syncSensitive = () => {
+        const sens = isSensitiveHeaderName(nameIn.value);
+        valIn.type = sens && !entry._revealed ? "password" : "text";
+        revBtn.hidden = !sens;
+        revBtn.textContent = entry._revealed ? "Hide" : "Show";
+      };
+      revBtn.addEventListener("click", () => {
+        entry._revealed = !entry._revealed;
+        syncSensitive();
+      });
+
+      nameIn.addEventListener("input", () => {
+        entry.name = nameIn.value;
+        syncSensitive();
+        markFormDirty(true);
+        renderInheritedHeaders();
+      });
+      valIn.addEventListener("input", () => {
+        entry.value = valIn.value;
+        markFormDirty(true);
+        renderPipelineCards();
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-secondary btn-sm";
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", () => {
+        list.splice(idx, 1);
+        markFormDirty(true);
+        renderStudioDefaultHeaders();
+        renderInheritedHeaders();
+        renderPipelineCards();
+      });
+
+      syncSensitive();
+      row.append(cb, nameIn, valIn, revBtn, delBtn);
+      els.studioDefaultHeadersList.appendChild(row);
+    });
+  }
+
+  function renderStudioInitialVars() {
+    if (!els.studioInitVarsList) return;
+    els.studioInitVarsList.replaceChildren();
+    const list = state.scenario.initial_variables || [];
+    list.forEach((v, idx) => {
+      const row = document.createElement("div");
+      row.className = "studio-repeat-row init-var-row";
+
+      const nameIn = document.createElement("input");
+      nameIn.type = "text";
+      nameIn.className = "control-input mono";
+      nameIn.placeholder = "var_name";
+      nameIn.value = v.name || "";
+
+      const valIn = document.createElement("input");
+      valIn.className = "control-input mono";
+      valIn.placeholder = "value";
+      valIn.value = v.value || "";
+
+      const sensLbl = document.createElement("label");
+      sensLbl.className = "check-toggle-label";
+      const sensCb = document.createElement("input");
+      sensCb.type = "checkbox";
+      sensCb.checked = Boolean(v.sensitive);
+      sensLbl.append(sensCb, document.createTextNode("Secret"));
+
+      const revBtn = document.createElement("button");
+      revBtn.type = "button";
+      revBtn.className = "btn btn-secondary btn-sm";
+      const syncType = () => {
+        valIn.type = v.sensitive && !v._revealed ? "password" : "text";
+        revBtn.hidden = !v.sensitive;
+        revBtn.textContent = v._revealed ? "Hide" : "Show";
+      };
+      revBtn.addEventListener("click", () => {
+        v._revealed = !v._revealed;
+        syncType();
+      });
+
+      nameIn.addEventListener("input", () => {
+        v.name = nameIn.value;
+        markFormDirty(true);
+        renderVarChips();
+        renderPipelineCards();
+      });
+      valIn.addEventListener("input", () => {
+        v.value = valIn.value;
+        markFormDirty(true);
+      });
+      sensCb.addEventListener("change", () => {
+        v.sensitive = sensCb.checked;
+        syncType();
+        markFormDirty(true);
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-secondary btn-sm";
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", () => {
+        list.splice(idx, 1);
+        markFormDirty(true);
+        renderStudioInitialVars();
+        renderVarChips();
+        renderPipelineCards();
+      });
+
+      syncType();
+      row.append(nameIn, valIn, sensLbl, revBtn, delBtn);
+      els.studioInitVarsList.appendChild(row);
+    });
+  }
+
+  function renderStepHeaders(step) {
+    if (!els.stepHeadersList) return;
+    els.stepHeadersList.replaceChildren();
+    step.headers.forEach((entry, idx) => {
+      const row = document.createElement("div");
+      row.className = "header-row";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = entry.enabled !== false;
+      cb.addEventListener("change", () => {
+        entry.enabled = cb.checked;
+        markFormDirty(true);
+        renderInheritedHeaders();
+        renderPipelineCards();
+      });
+
+      const nameIn = document.createElement("input");
+      nameIn.type = "text";
+      nameIn.className = "control-input mono";
+      nameIn.placeholder = "Header-Name";
+      nameIn.value = entry.name || "";
+
+      const valIn = document.createElement("input");
+      valIn.className = "control-input mono";
+      valIn.placeholder = "Bearer {{auth_token}}";
+      valIn.value = entry.value || "";
+      valIn.addEventListener("focus", () => {
+        lastFocusedStepInput = valIn;
+      });
+
+      const revBtn = document.createElement("button");
+      revBtn.type = "button";
+      revBtn.className = "btn btn-secondary btn-sm";
+      const syncSensitive = () => {
+        const sens = isSensitiveHeaderName(nameIn.value);
+        valIn.type = sens && !entry._revealed ? "password" : "text";
+        revBtn.hidden = !sens;
+        revBtn.textContent = entry._revealed ? "Hide" : "Show";
+      };
+      revBtn.addEventListener("click", () => {
+        entry._revealed = !entry._revealed;
+        syncSensitive();
+      });
+
+      nameIn.addEventListener("input", () => {
+        entry.name = nameIn.value;
+        syncSensitive();
+        markFormDirty(true);
+        renderInheritedHeaders();
+      });
+      valIn.addEventListener("input", () => {
+        entry.value = valIn.value;
+        markFormDirty(true);
+        renderPipelineCards();
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-secondary btn-sm";
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", () => {
+        step.headers.splice(idx, 1);
+        markFormDirty(true);
+        renderStepHeaders(step);
+        renderInheritedHeaders();
+        renderPipelineCards();
+      });
+
+      syncSensitive();
+      row.append(cb, nameIn, valIn, revBtn, delBtn);
+      els.stepHeadersList.appendChild(row);
+    });
+  }
+
+  function renderInheritedHeaders() {
+    if (!els.stepInheritedHeadersDetails || !els.stepInheritedHeadersList) return;
+    const step = getSelectedStep();
+    const defaults = (state.scenario.default_headers || []).filter(
+      (h) => h.enabled !== false && h.name.trim().length > 0
+    );
+    if (!step || defaults.length === 0) {
+      els.stepInheritedHeadersDetails.hidden = true;
+      els.stepInheritedHeadersList.replaceChildren();
+      return;
+    }
+
+    const stepOverrides = new Set(
+      (step.headers || [])
+        .filter((h) => h.enabled !== false && h.name.trim().length > 0)
+        .map((h) => h.name.trim().toLowerCase())
+    );
+    els.stepInheritedHeadersList.replaceChildren();
+    for (const h of defaults) {
+      const p = document.createElement("div");
+      p.className = "panel-subtitle mono";
+      const overridden = stepOverrides.has(h.name.trim().toLowerCase());
+      const valDisplay = isSensitiveHeaderName(h.name) ? "[REDACTED]" : h.value;
+      p.textContent = `${h.name}: ${valDisplay}${overridden ? " (overridden by step)" : ""}`;
+      els.stepInheritedHeadersList.appendChild(p);
+    }
+    els.stepInheritedHeadersDetails.hidden = false;
+  }
+
+  function setStepBodyMode(mode) {
+    const normalized = mode === "raw" || mode === "file" ? mode : "none";
+    const step = getSelectedStep();
+    if (step) step.body_mode = normalized;
+    for (const tab of els.stepBodyTabs) {
+      const selected = tab.dataset.stepBodyMode === normalized;
+      tab.setAttribute("aria-selected", selected ? "true" : "false");
+      tab.tabIndex = selected ? 0 : -1;
+      tab.toggleAttribute("focusgroupstart", selected);
+    }
+    for (const [k, panel] of Object.entries(els.stepBodyPanels)) {
+      if (panel) panel.hidden = k !== normalized;
+    }
+    updateStepBodyByteCount();
+  }
+
+  function updateStepBodyByteCount() {
+    if (!els.stepBodyRawBytes || !els.stepBodyRawInput) return;
+    const bytes = new TextEncoder().encode(els.stepBodyRawInput.value || "").length;
+    els.stepBodyRawBytes.textContent = formatBytes(bytes);
+  }
+
+  function renderStepExtractors(step) {
+    if (!els.stepExtractorsList) return;
+    els.stepExtractorsList.replaceChildren();
+    step.extractors.forEach((ex, idx) => {
+      const row = document.createElement("div");
+      row.className = "studio-repeat-row extractor-row";
+
+      const nameIn = document.createElement("input");
+      nameIn.type = "text";
+      nameIn.className = "control-input mono";
+      nameIn.placeholder = "var_name";
+      nameIn.value = ex.name || "";
+
+      const typeSel = document.createElement("select");
+      typeSel.className = "control-input";
+      for (const [val, label] of [
+        ["json_path", "JSON Body"],
+        ["header", "Resp Header"],
+        ["cookie", "Set-Cookie"],
+        ["status_code", "Status Code"],
+      ]) {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = label;
+        typeSel.appendChild(opt);
+      }
+      typeSel.value = ex.source?.type || "json_path";
+
+      const keyIn = document.createElement("input");
+      keyIn.type = "text";
+      keyIn.className = "control-input mono";
+      const syncSourceInput = () => {
+        const t = typeSel.value;
+        keyIn.hidden = t === "status_code";
+        keyIn.placeholder =
+          t === "json_path"
+            ? "$.data.access_token"
+            : t === "header"
+              ? "location"
+              : "session_id";
+        keyIn.value =
+          t === "json_path"
+            ? ex.source?.path || ""
+            : t === "header" || t === "cookie"
+              ? ex.source?.name || ""
+              : "";
+      };
+
+      const reqLbl = document.createElement("label");
+      reqLbl.className = "check-toggle-label";
+      const reqCb = document.createElement("input");
+      reqCb.type = "checkbox";
+      reqCb.checked = ex.required !== false;
+      reqLbl.append(reqCb, document.createTextNode("Required"));
+
+      const sensLbl = document.createElement("label");
+      sensLbl.className = "check-toggle-label";
+      const sensCb = document.createElement("input");
+      sensCb.type = "checkbox";
+      sensCb.checked = Boolean(ex.sensitive);
+      sensLbl.append(sensCb, document.createTextNode("Secret"));
+
+      nameIn.addEventListener("input", () => {
+        ex.name = nameIn.value;
+        if (isSensitiveHeaderName(ex.name) || ex.name.toLowerCase().includes("jwt") || ex.name.toLowerCase().includes("session")) {
+          ex.sensitive = true;
+          sensCb.checked = true;
+        }
+        markFormDirty(true);
+        renderPipelineCards();
+      });
+
+      typeSel.addEventListener("change", () => {
+        const t = typeSel.value;
+        if (t === "json_path") ex.source = { type: "json_path", path: "$.data" };
+        else if (t === "header") ex.source = { type: "header", name: "location" };
+        else if (t === "cookie") ex.source = { type: "cookie", name: "session_id" };
+        else ex.source = { type: "status_code" };
+        syncSourceInput();
+        markFormDirty(true);
+      });
+
+      keyIn.addEventListener("input", () => {
+        const t = typeSel.value;
+        if (t === "json_path") ex.source = { type: "json_path", path: keyIn.value };
+        else if (t === "header") ex.source = { type: "header", name: keyIn.value };
+        else if (t === "cookie") ex.source = { type: "cookie", name: keyIn.value };
+        markFormDirty(true);
+      });
+
+      reqCb.addEventListener("change", () => {
+        ex.required = reqCb.checked;
+        markFormDirty(true);
+      });
+      sensCb.addEventListener("change", () => {
+        ex.sensitive = sensCb.checked;
+        markFormDirty(true);
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-secondary btn-sm";
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", () => {
+        step.extractors.splice(idx, 1);
+        markFormDirty(true);
+        renderStepExtractors(step);
+        renderPipelineCards();
+      });
+
+      syncSourceInput();
+      row.append(nameIn, typeSel, keyIn, reqLbl, sensLbl, delBtn);
+      els.stepExtractorsList.appendChild(row);
+    });
+  }
+
+  function renderStepJsonChecks(step) {
+    if (!els.stepJsonChecksList) return;
+    els.stepJsonChecksList.replaceChildren();
+    const checks = step.assertions?.json_checks || [];
+    checks.forEach((chk, idx) => {
+      const row = document.createElement("div");
+      row.className = "studio-repeat-row json-check-row";
+
+      const pathIn = document.createElement("input");
+      pathIn.type = "text";
+      pathIn.className = "control-input mono";
+      pathIn.placeholder = "$.order.status";
+      pathIn.value = chk.path || "";
+
+      const opSel = document.createElement("select");
+      opSel.className = "control-input";
+      for (const [val, label] of [
+        ["exists", "Exists"],
+        ["equals", "Equals"],
+      ]) {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = label;
+        opSel.appendChild(opt);
+      }
+      opSel.value = chk.op || "exists";
+
+      const expIn = document.createElement("input");
+      expIn.type = "text";
+      expIn.className = "control-input mono";
+      expIn.placeholder = "confirmed";
+      expIn.value = chk.expected_raw !== undefined ? chk.expected_raw : formatExpectedJsonValue(chk.expected);
+      expIn.hidden = opSel.value !== "equals";
+
+      pathIn.addEventListener("input", () => {
+        chk.path = pathIn.value;
+        markFormDirty(true);
+      });
+      opSel.addEventListener("change", () => {
+        chk.op = opSel.value;
+        expIn.hidden = opSel.value !== "equals";
+        markFormDirty(true);
+      });
+      expIn.addEventListener("input", () => {
+        chk.expected_raw = expIn.value;
+        markFormDirty(true);
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-secondary btn-sm";
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", () => {
+        checks.splice(idx, 1);
+        markFormDirty(true);
+        renderStepJsonChecks(step);
+      });
+
+      row.append(pathIn, opSel, expIn, delBtn);
+      els.stepJsonChecksList.appendChild(row);
+    });
+  }
+
+  function syncStepStatusFields(step) {
+    const mode = step.assertions?.status?.type || "any_2xx";
+    if (els.stepStatusMode) els.stepStatusMode.value = mode;
+    if (els.stepStatusExactWrap) els.stepStatusExactWrap.hidden = mode !== "exact";
+    if (els.stepStatusRangeWrap) els.stepStatusRangeWrap.hidden = mode !== "range";
+    if (mode === "exact" && els.stepStatusExact) {
+      els.stepStatusExact.value = (step.assertions.status.codes || [200]).join(", ");
+    } else if (mode === "range" && els.stepStatusMin && els.stepStatusMax) {
+      els.stepStatusMin.value = String(step.assertions.status.min || 200);
+      els.stepStatusMax.value = String(step.assertions.status.max || 299);
+    }
+  }
+
+  function renderStepEditor() {
+    const step = getSelectedStep();
+    if (!step) {
+      if (els.stepEditorEmpty) els.stepEditorEmpty.hidden = false;
+      if (els.stepEditorForm) els.stepEditorForm.hidden = true;
+      return;
+    }
+    if (els.stepEditorEmpty) els.stepEditorEmpty.hidden = true;
+    if (els.stepEditorForm) els.stepEditorForm.hidden = false;
+
+    if (els.stepNameInput) els.stepNameInput.value = step.name || "";
+    if (els.stepMethodSelect) els.stepMethodSelect.value = step.method || "GET";
+    if (els.stepEnabledCheckbox) els.stepEnabledCheckbox.checked = step.enabled !== false;
+    if (els.stepUrlInput) els.stepUrlInput.value = step.url || "";
+    if (els.stepBodyRawInput) els.stepBodyRawInput.value = step.body || "";
+    if (els.stepBodyFileInput) els.stepBodyFileInput.value = step.body_file || "";
+    if (els.stepOnFailure) els.stepOnFailure.value = step.on_failure || "abort_iteration";
+    if (els.stepThinkTime) els.stepThinkTime.value = step.think_time || "";
+    if (els.stepTimeoutOverride) els.stepTimeoutOverride.value = step.timeout || "";
+
+    setStepBodyMode(step.body_mode || "none");
+    renderVarChips();
+    renderStepHeaders(step);
+    renderInheritedHeaders();
+    renderStepExtractors(step);
+    syncStepStatusFields(step);
+    renderStepJsonChecks(step);
+  }
+
+  function renderStudioAll() {
+    if (els.studioSeqName) els.studioSeqName.value = state.scenario.name || "";
+    if (els.studioBaseUrl) els.studioBaseUrl.value = state.scenario.base_url || "";
+    renderStudioDefaultHeaders();
+    renderStudioInitialVars();
+    renderPipelineCards();
+    renderStepEditor();
+    renderReviewPanel();
+    renderDryRunTraces();
+  }
+
+  function setStudioTab(tabKey) {
+    const key = tabKey === "review" ? "review" : "edit";
+    state.studioTab = key;
+    for (const tab of els.studioTabs) {
+      const selected = tab.dataset.studioTab === key;
+      tab.setAttribute("aria-selected", selected ? "true" : "false");
+      tab.tabIndex = selected ? 0 : -1;
+      tab.toggleAttribute("focusgroupstart", selected);
+    }
+    for (const [k, panel] of Object.entries(els.studioPanels)) {
+      if (panel) panel.hidden = k !== key;
+    }
+    if (key === "review") {
+      runSequenceValidation(false);
+    }
+  }
+
+  function setStepSubTab(subKey) {
+    const key = subKey === "extract" || subKey === "flow" ? subKey : "req";
+    state.stepSubTab = key;
+    for (const tab of els.stepSubTabs) {
+      const selected = tab.dataset.stepSubtab === key;
+      tab.setAttribute("aria-selected", selected ? "true" : "false");
+      tab.tabIndex = selected ? 0 : -1;
+      tab.toggleAttribute("focusgroupstart", selected);
+    }
+    for (const [k, panel] of Object.entries(els.stepSubPanels)) {
+      if (panel) panel.hidden = k !== key;
+    }
+  }
+
+  function bindTabGroup(tablistEl, tabs, getKey, onSelect) {
+    if (!tablistEl || tabs.length === 0) return;
+    tabs.forEach((tab, idx) => {
+      tab.addEventListener("click", () => onSelect(getKey(tab)));
+      tab.addEventListener("keydown", (event) => {
+        if ("focusGroup" in HTMLElement.prototype) return;
+        let nextIdx = null;
+        if (event.key === "ArrowRight") nextIdx = (idx + 1) % tabs.length;
+        else if (event.key === "ArrowLeft") nextIdx = (idx - 1 + tabs.length) % tabs.length;
+        else if (event.key === "Home") nextIdx = 0;
+        else if (event.key === "End") nextIdx = tabs.length - 1;
+        if (nextIdx !== null) {
+          event.preventDefault();
+          const target = tabs[nextIdx];
+          target.focus();
+          onSelect(getKey(target));
+        }
+      });
+    });
+  }
+
+  function renderReviewPanel() {
+    const rev = state.studioReview;
+    if (els.studioReviewStatusPill) {
+      els.studioReviewStatusPill.className = "badge";
+      if (!rev) {
+        els.studioReviewStatusPill.textContent = "Not Validated";
+        els.studioReviewStatusPill.classList.add("badge-idle");
+      } else if (rev.valid) {
+        els.studioReviewStatusPill.textContent = `Valid (${rev.enabled_step_count} steps)`;
+        els.studioReviewStatusPill.classList.add("badge-running");
+      } else {
+        els.studioReviewStatusPill.textContent = `${rev.errors.length} Error(s)`;
+        els.studioReviewStatusPill.classList.add("badge-failed");
+      }
+    }
+
+    if (els.studioReviewAlerts) {
+      els.studioReviewAlerts.replaceChildren();
+      if (rev) {
+        for (const err of rev.errors || []) {
+          const box = document.createElement("div");
+          box.className = "notice-banner notice-error";
+          box.textContent = err;
+          els.studioReviewAlerts.appendChild(box);
+        }
+        for (const warn of rev.warnings || []) {
+          const box = document.createElement("div");
+          box.className = "notice-banner";
+          box.textContent = warn;
+          els.studioReviewAlerts.appendChild(box);
+        }
+      }
+    }
+
+    if (els.studioReviewTableBody) {
+      els.studioReviewTableBody.replaceChildren();
+      if (!rev || !Array.isArray(rev.steps) || rev.steps.length === 0) {
+        const tr = document.createElement("tr");
+        const th = document.createElement("th");
+        th.scope = "row";
+        th.textContent = "--";
+        const td = document.createElement("td");
+        td.textContent = "Click Validate or Refresh Review";
+        tr.append(th, td);
+        for (let i = 0; i < 5; i += 1) {
+          const empty = document.createElement("td");
+          empty.textContent = "--";
+          tr.appendChild(empty);
+        }
+        els.studioReviewTableBody.appendChild(tr);
+      } else {
+        for (const step of rev.steps) {
+          const tr = document.createElement("tr");
+          const th = document.createElement("th");
+          th.scope = "row";
+          th.textContent = step.enabled ? step.name : `${step.name} [disabled]`;
+
+          const tdIdx = document.createElement("td");
+          tdIdx.className = "mono";
+          tdIdx.textContent = `#${step.order_number}`;
+
+          const tdTarget = document.createElement("td");
+          tdTarget.className = "mono";
+          tdTarget.textContent = `${step.method} ${step.target_preview}`;
+
+          const tdConsumes = document.createElement("td");
+          tdConsumes.className = "mono";
+          tdConsumes.textContent = step.consumes.length ? step.consumes.join(", ") : "-";
+
+          const tdProduces = document.createElement("td");
+          tdProduces.className = "mono";
+          tdProduces.textContent = step.produces.length ? step.produces.join(", ") : "-";
+
+          const tdExpects = document.createElement("td");
+          tdExpects.textContent = step.assertions_summary;
+
+          const tdFail = document.createElement("td");
+          tdFail.className = "mono";
+          tdFail.textContent = step.on_failure === "continue" ? "continue" : "abort";
+
+          tr.append(th, tdIdx, tdTarget, tdConsumes, tdProduces, tdExpects, tdFail);
+          els.studioReviewTableBody.appendChild(tr);
+        }
+      }
+    }
+  }
+
+  async function runSequenceValidation(showBannerOnOk) {
+    const cfg = readFormConfig();
+    try {
+      const resp = await apiFetch("/api/runs/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cfg),
+      });
+      const data = await resp.json();
+      state.studioReview = data.review || {
+        valid: data.valid,
+        enabled_step_count: 0,
+        steps: [],
+        warnings: data.warnings || [],
+        errors: Object.values(data.field_errors || {}),
+      };
+      if (els.studioCliPreview && data.cli_command) {
+        els.studioCliPreview.textContent = data.cli_command;
+        els.studioCliPreview.hidden = false;
+      }
+      renderReviewPanel();
+      renderSidebarSequenceSummary();
+
+      if (els.studioValidationBanner) {
+        if (!data.valid) {
+          const firstErr =
+            Object.values(data.field_errors || {})[0] || "Sequence validation failed.";
+          els.studioValidationBanner.textContent = firstErr;
+          els.studioValidationBanner.className = "notice-banner notice-error";
+          els.studioValidationBanner.hidden = false;
+        } else if (showBannerOnOk) {
+          els.studioValidationBanner.textContent = `Sequence valid (${state.studioReview.enabled_step_count} steps across ${state.studioReview.unique_hosts || 1} host(s)).`;
+          els.studioValidationBanner.className = "notice-banner";
+          els.studioValidationBanner.hidden = false;
+        } else {
+          els.studioValidationBanner.hidden = true;
+        }
+      }
+      return data;
+    } catch (err) {
+      if (els.studioValidationBanner) {
+        els.studioValidationBanner.textContent = `Validation error: ${err.message}`;
+        els.studioValidationBanner.className = "notice-banner notice-error";
+        els.studioValidationBanner.hidden = false;
+      }
+      return null;
+    }
+  }
+
+  function renderDryRunTraces() {
+    if (!els.dryRunTraceList || !els.dryRunSummaryBadge) return;
+    const report = state.dryRunReport;
+    els.dryRunTraceList.replaceChildren();
+    els.dryRunSummaryBadge.className = "badge";
+
+    if (!report) {
+      els.dryRunSummaryBadge.textContent = state.dryRunBusy ? "Running..." : "Idle";
+      els.dryRunSummaryBadge.classList.add(state.dryRunBusy ? "badge-ramping" : "badge-idle");
+      return;
+    }
+
+    if (report.completed) {
+      els.dryRunSummaryBadge.textContent = `Passed (${report.total_duration_ms.toFixed(1)} ms)`;
+      els.dryRunSummaryBadge.classList.add("badge-running");
+    } else {
+      els.dryRunSummaryBadge.textContent = `Failed (${report.total_duration_ms.toFixed(1)} ms)`;
+      els.dryRunSummaryBadge.classList.add("badge-failed");
+    }
+
+    for (const step of report.steps || []) {
+      const card = document.createElement("article");
+      card.className = `trace-card ${step.passed ? "is-pass" : "is-fail"}`;
+
+      const head = document.createElement("div");
+      head.className = "trace-card-head";
+      const title = document.createElement("strong");
+      title.textContent = `#${step.order_number} ${step.step_name} (${step.method})`;
+      const badge = document.createElement("span");
+      badge.className = `badge ${step.passed ? "badge-running" : "badge-failed"}`;
+      badge.textContent = step.passed
+        ? `HTTP ${step.status_code ?? "--"} PASS`
+        : step.aborted_iteration
+          ? "ABORTED"
+          : "FAIL";
+      head.append(title, badge);
+
+      const metaLine = document.createElement("div");
+      metaLine.className = "trace-meta-line mono";
+      metaLine.textContent = `${step.resolved_url} | ${step.latency_ms.toFixed(2)} ms | ${formatBytes(step.bytes_received)}`;
+
+      card.append(head, metaLine);
+
+      if (step.error) {
+        const errBox = document.createElement("div");
+        errBox.className = "notice-banner notice-error";
+        errBox.textContent = step.error;
+        card.appendChild(errBox);
+      }
+
+      if (Array.isArray(step.assertions) && step.assertions.length > 0) {
+        const row = document.createElement("div");
+        row.className = "pipeline-badges-row";
+        for (const a of step.assertions) {
+          const pill = document.createElement("span");
+          pill.className = `flow-pill ${a.passed ? "flow-pill-out" : "flow-pill-err"}`;
+          pill.textContent = `${a.passed ? "✓" : "✗"} ${a.description}`;
+          if (a.detail) pill.title = a.detail;
+          row.appendChild(pill);
+        }
+        card.appendChild(row);
+      }
+
+      if (Array.isArray(step.extracted) && step.extracted.length > 0) {
+        const row = document.createElement("div");
+        row.className = "pipeline-badges-row";
+        for (const ex of step.extracted) {
+          const pill = document.createElement("span");
+          pill.className = `flow-pill mono ${ex.found ? "flow-pill-in" : "flow-pill-err"}`;
+          pill.textContent = ex.found
+            ? `${ex.name}=${ex.value}`
+            : `${ex.name}: MISSING`;
+          row.appendChild(pill);
+        }
+        card.appendChild(row);
+      }
+
+      if (step.response_body_preview) {
+        const det = document.createElement("details");
+        det.className = "auto-export-details";
+        const sum = document.createElement("summary");
+        sum.textContent = `Response Body Preview${step.response_body_truncated ? " (truncated at 4 KB)" : ""}`;
+        const pre = document.createElement("pre");
+        pre.className = "trace-preview-pre mono";
+        pre.textContent = step.response_body_preview;
+        det.append(sum, pre);
+        card.appendChild(det);
+      }
+
+      els.dryRunTraceList.appendChild(card);
+    }
+  }
+
+  async function runDryRunTrace() {
+    if (state.dryRunBusy) return;
+    state.dryRunBusy = true;
+    state.dryRunReport = null;
+    if (state.activeView !== "studio") {
+      setWorkspaceView("studio");
+    }
+    setStudioTab("review");
+    renderDryRunTraces();
+    if (els.studioRunDryRunBtn) els.studioRunDryRunBtn.disabled = true;
+
+    try {
+      const resp = await apiFetch("/api/scenarios/dry-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(readFormConfig()),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        if (els.studioValidationBanner) {
+          const msg = data.validation?.field_errors
+            ? Object.values(data.validation.field_errors)[0]
+            : data.error || `Dry-run failed (${resp.status})`;
+          els.studioValidationBanner.textContent = msg;
+          els.studioValidationBanner.className = "notice-banner notice-error";
+          els.studioValidationBanner.hidden = false;
+        }
+        state.dryRunReport = null;
+      } else {
+        state.dryRunReport = data;
+      }
+    } catch (err) {
+      if (els.studioValidationBanner) {
+        els.studioValidationBanner.textContent = `Dry-run failed: ${err.message}`;
+        els.studioValidationBanner.className = "notice-banner notice-error";
+        els.studioValidationBanner.hidden = false;
+      }
+    } finally {
+      state.dryRunBusy = false;
+      if (els.studioRunDryRunBtn) els.studioRunDryRunBtn.disabled = false;
+      renderDryRunTraces();
+    }
+  }
+
+  function importScenarioJsonText(rawText) {
+    const parsed = JSON.parse(rawText);
+    let cfg;
+    if (parsed && parsed.scenario) {
+      cfg = { ...parsed, mode: "sequence" };
+    } else if (parsed && Array.isArray(parsed.steps)) {
+      cfg = {
+        mode: "sequence",
+        concurrency: 50,
+        duration: "30s",
+        ramp_up: "0s",
+        timeout: "5000ms",
+        scenario: parsed,
+      };
+    } else {
+      throw new Error("Expected JSON with a 'scenario' or 'steps' array.");
+    }
+    populateFormConfig(cfg, null, true);
+    setWorkspaceView("studio");
+  }
+
+  function initSequenceStudio() {
+    bindTabGroup(els.studioWorkspaceTablist, els.studioTabs, (t) => t.dataset.studioTab, setStudioTab);
+    bindTabGroup(els.stepSubTablist, els.stepSubTabs, (t) => t.dataset.stepSubtab, setStepSubTab);
+    bindTabGroup(document.getElementById("step-body-tablist"), els.stepBodyTabs, (t) => t.dataset.stepBodyMode, (mode) => {
+      setStepBodyMode(mode);
+      markFormDirty(true);
+      renderPipelineCards();
+    });
+
+    if (els.navLiveMonitor) {
+      els.navLiveMonitor.addEventListener("click", () => setWorkspaceView("monitor"));
+    }
+    if (els.navSequenceStudio) {
+      els.navSequenceStudio.addEventListener("click", () => setWorkspaceView("studio"));
+    }
+    if (els.convertToSequenceBtn) {
+      els.convertToSequenceBtn.addEventListener("click", convertSingleToSequence);
+    }
+    if (els.sidebarEditSequenceBtn) {
+      els.sidebarEditSequenceBtn.addEventListener("click", () => {
+        setWorkspaceView("studio");
+        setStudioTab("edit");
+      });
+    }
+    if (els.sidebarDryRunBtn) {
+      els.sidebarDryRunBtn.addEventListener("click", runDryRunTrace);
+    }
+
+    if (els.studioPresetSelect && els.presetSelect) {
+      els.studioPresetSelect.addEventListener("change", () => {
+        els.presetSelect.value = els.studioPresetSelect.value;
+        els.presetSelect.dispatchEvent(new Event("change"));
+      });
+    }
+
+    if (els.studioNewBtn) {
+      els.studioNewBtn.addEventListener("click", () => {
+        state.selectedPresetId = null;
+        if (els.presetSelect) els.presetSelect.value = "";
+        if (els.studioPresetSelect) els.studioPresetSelect.value = "";
+        hydrateScenarioIntoState({
+          schema_version: 1,
+          name: "New API Sequence",
+          base_url: "",
+          default_headers: [],
+          initial_variables: [],
+          steps: [createDefaultStep(0)],
+        });
+        setConfigMode("sequence");
+        markFormDirty(false);
+      });
+    }
+
+    const openStudioSavePanel = () => {
+      if (!els.studioPresetSavePanel) return;
+      if (els.studioPresetNameInput) {
+        els.studioPresetNameInput.value =
+          (state.scenario.name || "").trim() || "Ordered API Sequence";
+      }
+      if (els.studioPresetDescInput) els.studioPresetDescInput.value = "";
+      els.studioPresetSavePanel.hidden = false;
+      els.studioPresetNameInput?.focus();
+    };
+
+    if (els.studioSaveBtn) {
+      els.studioSaveBtn.addEventListener("click", async () => {
+        if (!state.selectedPresetId) {
+          openStudioSavePanel();
+          return;
+        }
+        const existing = state.presets.find((p) => p.id === state.selectedPresetId);
+        if (!existing) {
+          openStudioSavePanel();
+          return;
+        }
+        try {
+          const resp = await apiFetch(`/api/presets/${encodeURIComponent(existing.id)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: existing.name,
+              description: existing.description,
+              config: readFormConfig(),
+            }),
+          });
+          if (!resp.ok) throw new Error(`Save failed (${resp.status})`);
+          await fetchPresets();
+          markFormDirty(false);
+        } catch (err) {
+          showBanner(err.message, true);
+        }
+      });
+    }
+    if (els.studioSaveAsBtn) {
+      els.studioSaveAsBtn.addEventListener("click", openStudioSavePanel);
+    }
+    if (els.studioPresetCancelBtn && els.studioPresetSavePanel) {
+      els.studioPresetCancelBtn.addEventListener("click", () => {
+        els.studioPresetSavePanel.hidden = true;
+      });
+    }
+    if (els.studioPresetCommitBtn) {
+      els.studioPresetCommitBtn.addEventListener("click", async () => {
+        const name = (els.studioPresetNameInput?.value || "").trim();
+        if (!name) return;
+        try {
+          const resp = await apiFetch("/api/presets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              description: (els.studioPresetDescInput?.value || "").trim() || null,
+              config: readFormConfig(),
+            }),
+          });
+          if (!resp.ok) throw new Error(`Failed to save preset (${resp.status})`);
+          const saved = await resp.json();
+          if (els.studioPresetSavePanel) els.studioPresetSavePanel.hidden = true;
+          state.selectedPresetId = saved.id;
+          await fetchPresets();
+          markFormDirty(false);
+        } catch (err) {
+          showBanner(err.message, true);
+        }
+      });
+    }
+
+    if (els.studioImportBtn) {
+      els.studioImportBtn.addEventListener("click", async () => {
+        if (state.system?.native_dialogs) {
+          try {
+            const resp = await apiFetch("/api/dialog/open-scenario-file", { method: "POST" });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || `Import failed (${resp.status})`);
+            if (!data.cancelled && data.config) {
+              populateFormConfig(data.config, null, true);
+              setWorkspaceView("studio");
+            }
+          } catch (err) {
+            showBanner(err.message, true);
+          }
+          return;
+        }
+        els.studioImportFileInput?.click();
+      });
+    }
+
+    if (els.studioImportFileInput) {
+      els.studioImportFileInput.addEventListener("change", async () => {
+        const file = els.studioImportFileInput.files?.[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          importScenarioJsonText(text);
+        } catch (err) {
+          showBanner(`Invalid scenario JSON: ${err.message}`, true);
+        } finally {
+          els.studioImportFileInput.value = "";
+        }
+      });
+    }
+
+    if (els.studioExportBtn) {
+      els.studioExportBtn.addEventListener("click", async () => {
+        const cfg = readFormConfig();
+        if (state.system?.native_dialogs) {
+          try {
+            const resp = await apiFetch("/api/dialog/save-scenario-file", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ config: cfg, redact_secrets: true }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || `Export failed (${resp.status})`);
+            if (!data.cancelled && data.path) showBanner(`Exported sequence JSON to ${data.path}`);
+          } catch (err) {
+            showBanner(err.message, true);
+          }
+          return;
+        }
+        const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "scenario.json";
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+
+    // Bind Studio workload & top-level fields <-> Sidebar fields
+    const bindSync = (studioEl, sidebarEl) => {
+      if (!studioEl || !sidebarEl) return;
+      studioEl.addEventListener("input", () => {
+        sidebarEl.value = studioEl.value;
+        markFormDirty(true);
+        updateOsWarningBanner();
+      });
+      sidebarEl.addEventListener("input", () => {
+        studioEl.value = sidebarEl.value;
+      });
+    };
+    bindSync(els.studioConcurrency, els.cfgConcurrency);
+    bindSync(els.studioDuration, els.cfgDuration);
+    bindSync(els.studioRampUp, els.cfgRampUp);
+    bindSync(els.studioTimeout, els.cfgTimeout);
+
+    if (els.studioSeqName) {
+      els.studioSeqName.addEventListener("input", () => {
+        state.scenario.name = els.studioSeqName.value;
+        markFormDirty(true);
+        renderSidebarSequenceSummary();
+      });
+    }
+    if (els.studioBaseUrl) {
+      els.studioBaseUrl.addEventListener("input", () => {
+        state.scenario.base_url = els.studioBaseUrl.value;
+        markFormDirty(true);
+      });
+    }
+
+    if (els.studioAddDefaultHeaderBtn) {
+      els.studioAddDefaultHeaderBtn.addEventListener("click", () => {
+        state.scenario.default_headers.push({ name: "", value: "", enabled: true, _revealed: false });
+        markFormDirty(true);
+        renderStudioDefaultHeaders();
+      });
+    }
+    if (els.studioAddInitVarBtn) {
+      els.studioAddInitVarBtn.addEventListener("click", () => {
+        state.scenario.initial_variables.push({ name: "", value: "", sensitive: false, _revealed: false });
+        markFormDirty(true);
+        renderStudioInitialVars();
+        renderVarChips();
+      });
+    }
+    if (els.studioAddStepBtn) {
+      els.studioAddStepBtn.addEventListener("click", () => {
+        const next = createDefaultStep(state.scenario.steps.length);
+        state.scenario.steps.push(next);
+        state.selectedStepId = next.id;
+        markFormDirty(true);
+        renderStudioAll();
+        renderSidebarSequenceSummary();
+        els.stepNameInput?.focus();
+      });
+    }
+
+    // Step Editor field bindings
+    if (els.stepNameInput) {
+      els.stepNameInput.addEventListener("input", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.name = els.stepNameInput.value;
+        markFormDirty(true);
+        renderPipelineCards();
+        renderSidebarSequenceSummary();
+      });
+    }
+    if (els.stepMethodSelect) {
+      els.stepMethodSelect.addEventListener("change", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.method = els.stepMethodSelect.value;
+        markFormDirty(true);
+        renderPipelineCards();
+        renderSidebarSequenceSummary();
+      });
+    }
+    if (els.stepEnabledCheckbox) {
+      els.stepEnabledCheckbox.addEventListener("change", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.enabled = els.stepEnabledCheckbox.checked;
+        markFormDirty(true);
+        renderPipelineCards();
+        renderSidebarSequenceSummary();
+      });
+    }
+    if (els.stepUrlInput) {
+      els.stepUrlInput.addEventListener("focus", () => {
+        lastFocusedStepInput = els.stepUrlInput;
+      });
+      els.stepUrlInput.addEventListener("input", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.url = els.stepUrlInput.value;
+        markFormDirty(true);
+        renderPipelineCards();
+      });
+    }
+    if (els.stepAddHeaderBtn) {
+      els.stepAddHeaderBtn.addEventListener("click", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.headers.push({ name: "", value: "", enabled: true, _revealed: false });
+        markFormDirty(true);
+        renderStepHeaders(step);
+      });
+    }
+    if (els.stepBodyRawInput) {
+      els.stepBodyRawInput.addEventListener("focus", () => {
+        lastFocusedStepInput = els.stepBodyRawInput;
+      });
+      els.stepBodyRawInput.addEventListener("input", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.body = els.stepBodyRawInput.value;
+        updateStepBodyByteCount();
+        markFormDirty(true);
+        renderPipelineCards();
+      });
+    }
+    if (els.stepFormatJsonBtn && els.stepBodyRawInput) {
+      els.stepFormatJsonBtn.addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse(els.stepBodyRawInput.value);
+          els.stepBodyRawInput.value = JSON.stringify(parsed, null, 2);
+          els.stepBodyRawInput.dispatchEvent(new Event("input", { bubbles: true }));
+        } catch (err) {
+          showBanner(`Step body is not valid JSON: ${err.message}`, true);
+        }
+      });
+    }
+    if (els.stepBodyFileInput) {
+      els.stepBodyFileInput.addEventListener("input", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.body_file = els.stepBodyFileInput.value;
+        markFormDirty(true);
+      });
+    }
+    if (els.stepChooseBodyFileBtn) {
+      els.stepChooseBodyFileBtn.addEventListener("click", async () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        try {
+          const resp = await apiFetch("/api/dialog/open-body-file", { method: "POST" });
+          const data = await resp.json();
+          if (resp.ok && !data.cancelled && data.path) {
+            step.body_file = data.path;
+            if (els.stepBodyFileInput) els.stepBodyFileInput.value = data.path;
+            markFormDirty(true);
+          }
+        } catch (err) {
+          showBanner(`Unable to open file picker: ${err.message}`, true);
+        }
+      });
+    }
+    if (els.stepAddExtractorBtn) {
+      els.stepAddExtractorBtn.addEventListener("click", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.extractors.push({
+          name: "",
+          source: { type: "json_path", path: "$.data" },
+          required: true,
+          sensitive: false,
+        });
+        markFormDirty(true);
+        renderStepExtractors(step);
+      });
+    }
+    if (els.stepStatusMode) {
+      els.stepStatusMode.addEventListener("change", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        const m = els.stepStatusMode.value;
+        if (m === "exact") step.assertions.status = { type: "exact", codes: [200] };
+        else if (m === "range") step.assertions.status = { type: "range", min: 200, max: 299 };
+        else if (m === "any") step.assertions.status = { type: "any" };
+        else step.assertions.status = { type: "any_2xx" };
+        markFormDirty(true);
+        syncStepStatusFields(step);
+      });
+    }
+    if (els.stepStatusExact) {
+      els.stepStatusExact.addEventListener("input", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        const codes = els.stepStatusExact.value
+          .split(",")
+          .map((s) => Number(s.trim()))
+          .filter((n) => Number.isInteger(n) && n >= 100 && n <= 599);
+        step.assertions.status = { type: "exact", codes };
+        markFormDirty(true);
+      });
+    }
+    const syncRange = () => {
+      const step = getSelectedStep();
+      if (!step) return;
+      step.assertions.status = {
+        type: "range",
+        min: Number(els.stepStatusMin?.value || 200),
+        max: Number(els.stepStatusMax?.value || 299),
+      };
+      markFormDirty(true);
+    };
+    if (els.stepStatusMin) els.stepStatusMin.addEventListener("input", syncRange);
+    if (els.stepStatusMax) els.stepStatusMax.addEventListener("input", syncRange);
+    if (els.stepOnFailure) {
+      els.stepOnFailure.addEventListener("change", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.on_failure = els.stepOnFailure.value;
+        markFormDirty(true);
+        renderPipelineCards();
+      });
+    }
+    if (els.stepThinkTime) {
+      els.stepThinkTime.addEventListener("input", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.think_time = els.stepThinkTime.value;
+        markFormDirty(true);
+        renderPipelineCards();
+      });
+    }
+    if (els.stepTimeoutOverride) {
+      els.stepTimeoutOverride.addEventListener("input", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.timeout = els.stepTimeoutOverride.value;
+        markFormDirty(true);
+      });
+    }
+    if (els.stepAddJsonCheckBtn) {
+      els.stepAddJsonCheckBtn.addEventListener("click", () => {
+        const step = getSelectedStep();
+        if (!step) return;
+        step.assertions.json_checks.push({
+          path: "$.status",
+          op: "exists",
+          expected: null,
+          expected_raw: "",
+        });
+        markFormDirty(true);
+        renderStepJsonChecks(step);
+      });
+    }
+
+    if (els.studioValidateBtn) {
+      els.studioValidateBtn.addEventListener("click", () => runSequenceValidation(true));
+    }
+    if (els.studioRefreshReviewBtn) {
+      els.studioRefreshReviewBtn.addEventListener("click", () => runSequenceValidation(false));
+    }
+    if (els.studioCopyCliBtn) {
+      els.studioCopyCliBtn.addEventListener("click", async () => {
+        const res = await runSequenceValidation(false);
+        if (res?.cli_command && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(res.cli_command).catch(() => {});
+          const orig = els.studioCopyCliBtn.textContent;
+          els.studioCopyCliBtn.textContent = "Copied!";
+          setTimeout(() => {
+            els.studioCopyCliBtn.textContent = orig;
+          }, 1400);
+        }
+      });
+    }
+    if (els.studioDryRunBtn) {
+      els.studioDryRunBtn.addEventListener("click", runDryRunTrace);
+    }
+    if (els.studioRunDryRunBtn) {
+      els.studioRunDryRunBtn.addEventListener("click", runDryRunTrace);
+    }
+    if (els.studioStartBtn) {
+      els.studioStartBtn.addEventListener("click", startInteractiveRun);
+    }
+  }
+
   async function boot() {
     initThemeControls();
     initButtons();
@@ -2885,10 +5329,12 @@
     try {
       const meta = await fetchMeta();
       if (meta.mode === "interactive") {
+        if (els.workspaceNav) els.workspaceNav.hidden = false;
         if (els.toggleSidebarBtn) els.toggleSidebarBtn.hidden = false;
         if (els.configSidebar) els.configSidebar.hidden = false;
         if (els.runHistoryPanel) els.runHistoryPanel.hidden = false;
         initInteractiveControls();
+        initSequenceStudio();
         await Promise.all([
           fetchSystemInfo(),
           fetchPresets(),

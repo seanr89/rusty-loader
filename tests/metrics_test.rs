@@ -258,6 +258,7 @@ fn test_benchmark_stats_json_serialization_roundtrip() {
         },
         status_distribution,
         error_breakdown,
+        scenario_stats: None,
     };
 
     let json = serde_json::to_string_pretty(&original).expect("serialization should succeed");
@@ -402,6 +403,8 @@ async fn test_telemetry_hub_ring_buffer_bounding_and_non_blocking_lag() {
             window_latency_ms: WindowLatencyMs::default(),
             status_distribution: HashMap::new(),
             error_breakdown: HashMap::new(),
+            step_snapshots: None,
+            journey_snapshot: None,
         };
         hub.publish_snapshot(snap);
     }

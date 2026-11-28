@@ -117,7 +117,7 @@
         <!-- Pill 1 -->
         <rect x="0" y="0" width="126" height="36" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-opacity="0.40"/>
         <circle cx="18" cy="18" r="4.5" fill="#38bdf8"/>
-        <text x="32" y="23" fill="#e2e8f0">700+ VUs</text>
+        <text x="32" y="23" fill="#e2e8f0">50+ VUs</text>
 
         <!-- Pill 2 -->
         <rect x="138" y="0" width="160" height="36" rx="10" fill="#0f172a" stroke="#10b981" stroke-opacity="0.40"/>
@@ -140,7 +140,7 @@
         <rect x="0" y="0" width="618" height="44" rx="10" fill="#090f1d" stroke="#263449"/>
         <text x="16" y="27" fill="#94a3b8" font-size="13.5" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, monospace">
           <tspan fill="#10b981">$</tspan>
-          <tspan fill="#e2e8f0"> rusty-loader -u https://api.example.com/v1/ping -c 700 -d 30s </tspan>
+          <tspan fill="#e2e8f0"> rusty-loader -u https://api.example.com/v1/ping -c 50 -d 30s </tspan>
           <tspan fill="#38bdf8">--gui</tspan>
         </text>
       </g>

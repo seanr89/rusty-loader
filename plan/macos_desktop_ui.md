@@ -114,7 +114,7 @@ AppKit (`NSApplication`, `NSWindow`, `WKWebView`, `NSOpenPanel`, `NSSavePanel`) 
 - `presets.json` in `~/Library/Application Support/rusty-loader/` is written atomically with `0600` Unix permissions (`OpenOptionsExt::mode(0o600)`), and exporting a preset as a shareable CLI command or JSON config provides a "Redact Secrets" toggle (enabled by default).
 
 ### 3. macOS `RLIMIT_NOFILE` Auto-Raise & Pre-Flight Warning
-- LaunchServices on macOS commonly launches GUI `.app` bundles with a `256` soft file-descriptor limit (`RLIMIT_NOFILE`), which is insufficient for 700-VU benchmarks (`> 4096` recommended).
+- LaunchServices on macOS commonly launches GUI `.app` bundles with a `256` soft file-descriptor limit (`RLIMIT_NOFILE`), which is insufficient for high-concurrency benchmarks (`> 4096` recommended).
 - Add `raise_nofile_soft_limit(preferred: u64)` in `src/os/unix.rs`:
   - Inspect `getrlimit(RLIMIT_NOFILE)` (`rlim_cur`, `rlim_max`).
   - On macOS, clamp target against `min(rlim_max, OPEN_MAX)` (trying fallback sequence `[preferred, 65536, 10240, 4096]`) using `libc::setrlimit(libc::RLIMIT_NOFILE, ...)`, never failing startup if raising is rejected.
@@ -137,7 +137,7 @@ AppKit (`NSApplication`, `NSWindow`, `WKWebView`, `NSOpenPanel`, `NSSavePanel`) 
    - Introduce `BenchmarkConfigInput` (`#[derive(Debug, Clone, Serialize, Deserialize)]`) mirroring all CLI/UI inputs:
      - `url: String`
      - `method: HttpMethod`
-     - `concurrency: usize` (default `700`)
+     - `concurrency: usize` (default `50`)
      - `duration: String` (default `"30s"`, parsed via `cli::parse_duration`)
      - `ramp_up: String` (default `"0s"`, parsed via `cli::parse_duration`)
      - `timeout: String` (default `"5000ms"`, parsed via `cli::parse_timeout`)
@@ -370,7 +370,7 @@ Upgrade `index.html`, `styles.css`, and `app.js` while keeping all assets 100% e
 
 1. **AppKit Main-Thread Violation (`SIGABRT`):** `tao`/`wry`/`muda`/`rfd` must run on thread 0 (process main thread) on macOS. Never initialize `EventLoop` inside `#[tokio::main]` worker threads or call `rfd::FileDialog` directly from async Axum handlers; always dispatch via `EventLoopProxy<DesktopEvent>` + `oneshot`.
 2. **`WKWebView` Blocking `http://127.0.0.1`:** macOS App Transport Security (ATS) can block non-HTTPS requests inside bundled `.app` WebViews unless `NSAppTransportSecurity -> NSAllowsLocalNetworking = true` is explicitly configured in `Info.plist`.
-3. **LaunchServices `256` File Descriptor Soft Limit:** Apps opened from Finder/Spotlight inherit `ulimit -n = 256`, which causes `EMFILE` socket failures under 700 VUs unless raised early via `setrlimit(RLIMIT_NOFILE, ...)` and surfaced in the UI when capped.
+3. **LaunchServices `256` File Descriptor Soft Limit:** Apps opened from Finder/Spotlight inherit `ulimit -n = 256`, which causes `EMFILE` socket failures under high concurrency unless raised early via `setrlimit(RLIMIT_NOFILE, ...)` and surfaced in the UI when capped.
 4. **Tokio `ctrl_c()` Contention:** Having `TestController` register its own `ctrl_c()` listener inside background GUI-driven runs can interfere with desktop shutdown hooks; isolate via `TestController::with_signal_handler(false)`.
 5. **Backwards Compatibility of `--gui` & Existing Tests:** `tests/gui_test.rs` and `tests/cli_parsing_test.rs` assert exact `Cli`, `GuiConfig`, `MetaResponse`, and `/api/stream` behavior for CLI `--gui` runs. Keep `start_gui_server` intact and only extend `MetaResponse` with `#[serde(default)]` fields.
 6. **Code Signing & Gatekeeper:** Verify `make macos-bundle`, `make macos-install`, and `make macos-update` produce valid strict signatures (`codesign --verify --deep --strict`) with both ad-hoc (`-`) and Developer ID certificates after adding `WKWebView` / `Info.plist` entitlements/keys.

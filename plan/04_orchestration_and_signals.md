@@ -1,7 +1,7 @@
 # Task 4: Concurrency Orchestration, Ramp-Up & Signal Handling
 
 ## 1. Goal & Context
-Implement the `TestController` and concurrency orchestrator that manages spawning up to 700+ async worker tasks, coordinates staggered ramp-up schedules, manages the benchmark duration lifecycle, and captures `SIGINT` (`Ctrl+C`) for graceful shutdown with partial report generation.
+Implement the `TestController` and concurrency orchestrator that manages spawning high-concurrency async worker tasks, coordinates staggered ramp-up schedules, manages the benchmark duration lifecycle, and captures `SIGINT` (`Ctrl+C`) for graceful shutdown with partial report generation.
 
 ---
 
@@ -96,7 +96,7 @@ Tasks to perform:
 ---
 
 ## 6. Acceptance Criteria Checklist
-- [ ] Controller supports spawning arbitrary concurrency levels (including 700+ workers).
+- [ ] Controller supports spawning arbitrary concurrency levels (including 50+ / high-concurrency workers).
 - [ ] Ramp-up smoothly staggers worker launch times when configured.
 - [ ] Ctrl+C (`SIGINT`) triggers orderly worker shutdown without crashing or losing buffered metrics.
 - [ ] EOF is properly sent to the metrics channel on exit, allowing clean collector termination.

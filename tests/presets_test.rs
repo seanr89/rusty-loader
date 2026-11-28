@@ -34,6 +34,7 @@ fn sample_input(url: &str) -> BenchmarkConfigInput {
         output_json: None,
         output_csv: None,
         output_pdf: None,
+        ..Default::default()
     }
 }
 

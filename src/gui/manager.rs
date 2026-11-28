@@ -14,6 +14,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::{validate_input, BenchmarkConfig, BenchmarkConfigInput, ValidationReport};
+use crate::scenario::{redact_scenario_input, RequestMode};
 use crate::engine::{TestController, SHUTDOWN_GRACE_PERIOD};
 use crate::gui::api::{
     build_partial_stats_from_parts, is_sensitive_header, meta_from_config, sanitize_url, GuiMode,
@@ -527,6 +528,9 @@ pub fn redact_config_input(input: &BenchmarkConfigInput) -> BenchmarkConfigInput
             header.value = "[REDACTED]".to_string();
         }
     }
+    if let Some(ref sc) = input.scenario {
+        redacted.scenario = Some(redact_scenario_input(sc));
+    }
     redacted
 }
 
@@ -534,7 +538,7 @@ fn idle_meta() -> MetaResponse {
     MetaResponse {
         url: String::new(),
         method: "GET".to_string(),
-        concurrency: 700,
+        concurrency: 50,
         duration_secs: 30.0,
         ramp_up_secs: 0.0,
         timeout_ms: 5000,
@@ -543,6 +547,8 @@ fn idle_meta() -> MetaResponse {
         body_size_bytes: 0,
         phase: TelemetryPhase::Idle,
         mode: GuiMode::Interactive,
+        request_mode: RequestMode::Single,
+        scenario: None,
         run_id: None,
         preset_name: None,
         error_message: None,

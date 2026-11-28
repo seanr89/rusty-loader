@@ -15,7 +15,7 @@ fn test_default_values() {
         .expect("CLI should parse with only --url");
 
     assert_eq!(cli.url, "https://api.example.com/v1/ping");
-    assert_eq!(cli.concurrency, 700);
+    assert_eq!(cli.concurrency, 50);
     assert_eq!(cli.duration, Duration::from_secs(30));
     assert_eq!(cli.method, HttpMethod::Get);
     assert!(cli.headers.is_empty());
@@ -26,7 +26,7 @@ fn test_default_values() {
 
     let config = BenchmarkConfig::from_cli(cli).expect("Default CLI should produce valid config");
     assert_eq!(config.url.as_str(), "https://api.example.com/v1/ping");
-    assert_eq!(config.concurrency, 700);
+    assert_eq!(config.concurrency, 50);
     assert_eq!(config.duration, Duration::from_secs(30));
     assert_eq!(config.method, Method::GET);
     assert!(config.headers.is_empty());
@@ -68,7 +68,7 @@ fn test_timeout_formats() {
         "--url",
         "https://api.example.com/v1/ping",
         "--concurrency",
-        "700",
+        "250",
         "--duration",
         "60s",
         "--timeout",
@@ -260,7 +260,7 @@ fn test_ramp_up_and_bounds_validation() {
         "--method",
         "POST",
         "--concurrency",
-        "700",
+        "250",
         "--ramp-up",
         "10",
         "--duration",

@@ -71,7 +71,7 @@ strip = true
 ### 3.2 CLI Arguments (`src/cli.rs`)
 The CLI must accept the following flags and options:
 - `--url` (`-u`): Target endpoint (e.g. `https://api.example.com/v1/ping`, required).
-- `--concurrency` (`-c`): Number of concurrent workers (default: `700`).
+- `--concurrency` (`-c`): Number of concurrent workers (default: `50`).
 - `--duration` (`-d`): Benchmark duration (default: `30s`, accepts strings like `30s`, `2m`, `1000ms`, or raw seconds).
 - `--method` (`-m`): HTTP method (default: `GET`, accepts `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`).
 - `--header` (`-H`): Key-value headers, repeatable (e.g. `-H "Authorization: Bearer xyz"`).
@@ -101,7 +101,7 @@ cargo test --test cli_parsing_test
 ```
 
 ### Test Cases in `tests/cli_parsing_test.rs`:
-1. Default values (`concurrency = 700`, `duration = 30s`, `timeout = 5000ms`, `method = GET`).
+1. Default values (`concurrency = 50`, `duration = 30s`, `timeout = 5000ms`, `method = GET`).
 2. Duration string parsing (`30s`, `2m`, `500ms`, `60`).
 3. Repeatable headers parsing into `HeaderMap`.
 4. Body file resolution (`@payload.json`) vs inline raw body string.

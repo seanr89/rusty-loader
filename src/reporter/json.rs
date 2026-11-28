@@ -10,6 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::config::BenchmarkConfig;
 use crate::metrics::stats::BenchmarkStats;
+use crate::scenario::ScenarioMetaSummary;
 
 /// Complete JSON report combining execution metadata and flattened [`BenchmarkStats`].
 ///
@@ -32,6 +33,9 @@ pub struct JsonReport {
     pub configured_duration_secs: f64,
     /// Configured request headers.
     pub headers: HashMap<String, String>,
+    /// Optional redacted scenario step metadata for ordered sequences.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scenario: Option<ScenarioMetaSummary>,
     /// Flattened benchmark summary metrics.
     #[serde(flatten)]
     pub stats: BenchmarkStats,
@@ -51,6 +55,8 @@ impl<'de> Deserialize<'de> for JsonReport {
             configured_duration_secs: f64,
             #[serde(default)]
             headers: HashMap<String, String>,
+            #[serde(default)]
+            scenario: Option<ScenarioMetaSummary>,
         }
 
         let value = serde_json::Value::deserialize(deserializer)?;
@@ -66,6 +72,7 @@ impl<'de> Deserialize<'de> for JsonReport {
             concurrency: meta.concurrency,
             configured_duration_secs: meta.configured_duration_secs,
             headers: meta.headers,
+            scenario: meta.scenario,
             stats,
         })
     }
@@ -81,13 +88,25 @@ impl JsonReport {
             }
         }
 
+        let scenario = config.scenario_meta();
+        let (url, method) = match scenario.as_ref() {
+            Some(sc) => (
+                sc.name
+                    .clone()
+                    .unwrap_or_else(|| format!("Sequence ({} steps)", sc.step_count)),
+                "MULTI".to_string(),
+            ),
+            None => (config.url.to_string(), config.method.as_str().to_string()),
+        };
+
         Self {
             timestamp: Utc::now().to_rfc3339(),
-            url: config.url.to_string(),
-            method: config.method.as_str().to_string(),
+            url,
+            method,
             concurrency: config.concurrency,
             configured_duration_secs: config.duration.as_secs_f64(),
             headers,
+            scenario,
             stats: stats.clone(),
         }
     }

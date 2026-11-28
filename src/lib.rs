@@ -11,3 +11,4 @@ pub mod metrics;
 pub mod os;
 pub mod presets;
 pub mod reporter;
+pub mod scenario;

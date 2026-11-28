@@ -1,6 +1,6 @@
 # Rusty-Loader: Sub-Agent Task Implementation Roadmap
 
-This document outlines the master implementation plan for building **`rusty-loader`** (a high-performance, asynchronous Rust API load testing CLI capable of driving 700+ concurrent virtual users with sub-millisecond measurement fidelity).
+This document outlines the master implementation plan for building **`rusty-loader`** (a high-performance, asynchronous Rust API load testing CLI capable of driving high-concurrency virtual user workloads with a 50-VU default and sub-millisecond measurement fidelity).
 
 The work is partitioned into **6 modular, sub-agent executable task specifications** located in this directory.
 
@@ -10,15 +10,15 @@ The work is partitioned into **6 modular, sub-agent executable task specificatio
 
 ```mermaid
 flowchart TD
-    CLI["CLI Parser (clap derive)<br/>--url, -c 700, -d, -m, -H, -b, -t, --ramp-up"] --> Config["Resolved Benchmark Config"]
+    CLI["CLI Parser (clap derive)<br/>--url, -c 50, -d, -m, -H, -b, -t, --ramp-up"] --> Config["Resolved Benchmark Config"]
     Config --> OSCheck["OS Sanity Check<br/>ulimit -n >= 4096"]
     OSCheck --> Controller["Test Controller & Concurrency Orchestrator"]
     
     subgraph Engine ["Async Worker Engine (tokio)"]
         Controller -->|"Staggered Ramp-Up / Spawner"| W1["Worker 1 (Async)"]
         Controller -->|"Staggered Ramp-Up / Spawner"| W2["Worker 2 (Async)"]
-        Controller -->|"..."| WN["Worker 700 (Async)"]
-        ClientPool[("Shared Client Pool<br/>Arc<reqwest::Client><br/>pool_max_idle=700, tcp_nodelay")] -.-> W1
+        Controller -->|"..."| WN["Worker 50 (Async)"]
+        ClientPool[("Shared Client Pool<br/>Arc<reqwest::Client><br/>pool_max_idle=50, tcp_nodelay")] -.-> W1
         ClientPool -.-> W2
         ClientPool -.-> WN
     end
@@ -91,7 +91,7 @@ graph TD
    - Warn user if OS file descriptor limit (`ulimit -n`) is $< 4096$.
 
 3. **Memory Footprint:**
-   - Maintain Resident Set Size (RSS) under 50 MB even under 700 concurrent async workers.
+   - Maintain Resident Set Size (RSS) under 50 MB even under high-concurrency async workers.
    - Response bodies are consumed in-memory as chunks/bytes and dropped immediately, not retained.
 
 4. **Graceful Teardown:**

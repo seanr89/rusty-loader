@@ -29,7 +29,7 @@ fn build_sample_config() -> BenchmarkConfig {
 
     BenchmarkConfig {
         url: Url::parse("https://api.example.com/v1/ping").expect("valid URL"),
-        concurrency: 700,
+        concurrency: 50,
         duration: Duration::from_secs(60),
         method: Method::POST,
         headers,
@@ -39,6 +39,7 @@ fn build_sample_config() -> BenchmarkConfig {
         output_json: None,
         output_csv: None,
         output_pdf: None,
+        scenario: None,
     }
 }
 
@@ -80,6 +81,7 @@ fn build_sample_stats(with_transport_errors: bool) -> BenchmarkStats {
         },
         status_distribution,
         error_breakdown,
+        scenario_stats: None,
     }
 }
 
@@ -93,7 +95,7 @@ fn test_table_rendering_contains_expected_sections_and_metrics() {
     // Overview & throughput assertions
     assert!(output.contains("https://api.example.com/v1/ping"));
     assert!(output.contains("POST"));
-    assert!(output.contains("700"));
+    assert!(output.contains("50"));
     assert!(output.contains("60.00 s"));
     assert!(output.contains("124500"));
     assert!(output.contains("124480 (99.98%)"));
@@ -172,7 +174,7 @@ fn test_json_output_file_creation_and_deserialization() {
         serde_json::from_str(&raw_json).expect("deserialize into JsonReport");
     assert_eq!(deserialized_report.url, "https://api.example.com/v1/ping");
     assert_eq!(deserialized_report.method, "POST");
-    assert_eq!(deserialized_report.concurrency, 700);
+    assert_eq!(deserialized_report.concurrency, 50);
     assert!((deserialized_report.configured_duration_secs - 60.0).abs() < 1e-6);
     assert_eq!(
         deserialized_report

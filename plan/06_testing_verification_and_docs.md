@@ -50,7 +50,7 @@ Verification script that:
 - Detailed installation instructions (`cargo install --path .` or `cargo build --release`).
 - Comprehensive argument options table matching clap derivation.
 - Copy-paste recipes:
-  - Basic ping test (`-u http://... -c 700 -d 30s`).
+  - Basic ping test (`-u http://... -c 50 -d 30s`).
   - POST benchmark with JSON payload and custom Authorization headers.
   - Ramp-up workload (`--ramp-up 10s`).
   - Automated CI benchmark with `--output-json report.json`.

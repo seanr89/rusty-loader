@@ -92,6 +92,16 @@
       </div>
 
       <div class="topbar-controls">
+        <nav id="workspace-nav" class="view-switcher" aria-label="Workspace views" hidden>
+          <button type="button" id="nav-live-monitor" class="view-switch-btn" aria-current="page" data-view="monitor">
+            Live Monitor
+          </button>
+          <button type="button" id="nav-sequence-studio" class="view-switch-btn" data-view="studio">
+            Sequence Studio
+            <span id="nav-step-count" class="nav-count-pill" hidden>0</span>
+          </button>
+        </nav>
+
         <div class="progress-cluster" aria-label="Benchmark progress">
           <div class="progress-labels">
             <span id="timer-elapsed">0.0s</span>
@@ -183,7 +193,7 @@
             <div id="preset-save-panel" class="preset-save-panel" hidden>
               <div class="field">
                 <label for="preset-name-input">Preset Name</label>
-                <input id="preset-name-input" type="text" class="control-input" placeholder="e.g. Prod Health Ping 700 VUs" data-error="err-preset-name">
+                <input id="preset-name-input" type="text" class="control-input" placeholder="e.g. Prod Health Ping 50 VUs" data-error="err-preset-name">
                 <div id="err-preset-name" class="error-msg">
                   <span role="img" aria-label="Error">!</span> Enter a name for this preset.
                 </div>
@@ -200,25 +210,43 @@
           </div>
 
           <form id="config-form" class="config-form" novalidate>
-            <div class="target-inputs-row">
-              <div class="field field-method">
-                <label for="cfg-method">Method</label>
-                <span class="hint" aria-hidden="true">&nbsp;</span>
-                <select id="cfg-method" name="method" class="control-input">
-                  <option value="GET">GET</option>
-                  <option value="POST">POST</option>
-                  <option value="PUT">PUT</option>
-                  <option value="DELETE">DELETE</option>
-                  <option value="PATCH">PATCH</option>
-                  <option value="HEAD">HEAD</option>
-                </select>
+            <div id="sequence-sidebar-summary" class="sequence-sidebar-summary" hidden>
+              <div class="field-header-row">
+                <strong id="sidebar-seq-title">Ordered Sequence</strong>
+                <span id="sidebar-seq-status" class="badge badge-idle">Unvalidated</span>
               </div>
-              <div class="field field-url">
-                <label for="cfg-url">Target URL</label>
-                <span id="hint-cfg-url" class="hint">Include scheme and host (HTTP or HTTPS)</span>
-                <input id="cfg-url" name="url" type="url" required class="control-input" placeholder="api.example.com/v1/ping" aria-describedby="hint-cfg-url" data-error="err-cfg-url">
-                <div id="err-cfg-url" class="error-msg">
-                  <span role="img" aria-label="Error">!</span> Enter a valid HTTP or HTTPS URL.
+              <ol id="sidebar-step-chain" class="sidebar-step-chain"></ol>
+              <div class="preset-actions">
+                <button id="sidebar-edit-sequence-btn" type="button" class="btn btn-secondary btn-sm">
+                  Edit &amp; Review Sequence &rarr;
+                </button>
+                <button id="sidebar-dry-run-btn" type="button" class="btn btn-secondary btn-sm">
+                  Dry-Run (1 VU)
+                </button>
+              </div>
+            </div>
+
+            <div id="single-mode-fields">
+              <div class="target-inputs-row">
+                <div class="field field-method">
+                  <label for="cfg-method">Method</label>
+                  <span class="hint" aria-hidden="true">&nbsp;</span>
+                  <select id="cfg-method" name="method" class="control-input">
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                    <option value="PATCH">PATCH</option>
+                    <option value="HEAD">HEAD</option>
+                  </select>
+                </div>
+                <div class="field field-url">
+                  <label for="cfg-url">Target URL</label>
+                  <span id="hint-cfg-url" class="hint">Include scheme and host (HTTP or HTTPS)</span>
+                  <input id="cfg-url" name="url" type="url" required class="control-input" placeholder="api.example.com/v1/ping" aria-describedby="hint-cfg-url" data-error="err-cfg-url">
+                  <div id="err-cfg-url" class="error-msg">
+                    <span role="img" aria-label="Error">!</span> Enter a valid HTTP or HTTPS URL.
+                  </div>
                 </div>
               </div>
             </div>
@@ -227,7 +255,7 @@
               <div class="field">
                 <label for="cfg-concurrency">Concurrency (VUs)</label>
                 <span id="hint-cfg-concurrency" class="hint">Parallel workers (&ge; 1)</span>
-                <input id="cfg-concurrency" name="concurrency" type="number" min="1" step="1" required value="700" class="control-input" aria-describedby="hint-cfg-concurrency" data-error="err-cfg-concurrency">
+                <input id="cfg-concurrency" name="concurrency" type="number" min="1" step="1" required value="50" class="control-input" aria-describedby="hint-cfg-concurrency" data-error="err-cfg-concurrency">
                 <div id="err-cfg-concurrency" class="error-msg">
                   <span role="img" aria-label="Error">!</span> Concurrency must be at least 1.
                 </div>
@@ -261,50 +289,60 @@
               </div>
             </div>
 
-            <div class="field">
-              <div class="field-header-row">
-                <label>Request Headers</label>
-                <button id="add-header-btn" type="button" class="btn btn-secondary btn-sm">+ Add Header</button>
+            <div id="single-mode-request-details" class="single-mode-request-details">
+              <div class="field">
+                <div class="field-header-row">
+                  <label>Request Headers</label>
+                  <button id="add-header-btn" type="button" class="btn btn-secondary btn-sm">+ Add Header</button>
+                </div>
+                <div id="headers-list" class="headers-list"></div>
               </div>
-              <div id="headers-list" class="headers-list"></div>
-            </div>
 
-            <div class="field">
-              <label>Request Body</label>
-              <div class="tabs-container">
-                <div role="tablist" aria-label="Request Body Mode" class="tablist">
-                  <button type="button" role="tab" id="tab-body-none" aria-selected="true" data-body-mode="none" tabindex="0">None</button>
-                  <button type="button" role="tab" id="tab-body-raw" aria-selected="false" data-body-mode="raw" tabindex="-1">Raw / JSON</button>
-                  <button type="button" role="tab" id="tab-body-file" aria-selected="false" data-body-mode="file" tabindex="-1">From File</button>
-                </div>
-
-                <div id="body-panel-none" role="tabpanel" aria-labelledby="tab-body-none" class="tabpanel" tabindex="0">
-                  <p class="panel-subtitle">No HTTP request body will be sent.</p>
-                </div>
-
-                <div id="body-panel-raw" role="tabpanel" aria-labelledby="tab-body-raw" class="tabpanel" hidden>
-                  <div class="tabpanel-inner">
-                    <div class="field-header-row">
-                      <span id="body-raw-bytes" class="panel-subtitle">0 B</span>
-                      <button id="format-json-btn" type="button" class="btn btn-secondary btn-sm">Format JSON</button>
-                    </div>
-                    <textarea id="cfg-body-raw" rows="5" class="control-input mono" placeholder='{"query":"active_records","limit":50}'></textarea>
+              <div class="field">
+                <label>Request Body</label>
+                <div class="tabs-container">
+                  <div focusgroup="tablist nomemory" role="tablist" aria-label="Request Body Mode" class="tablist">
+                    <button type="button" role="tab" id="tab-body-none" aria-selected="true" focusgroupstart data-body-mode="none" tabindex="0">None</button>
+                    <button type="button" role="tab" id="tab-body-raw" aria-selected="false" data-body-mode="raw" tabindex="-1">Raw / JSON</button>
+                    <button type="button" role="tab" id="tab-body-file" aria-selected="false" data-body-mode="file" tabindex="-1">From File</button>
                   </div>
-                </div>
 
-                <div id="body-panel-file" role="tabpanel" aria-labelledby="tab-body-file" class="tabpanel" hidden>
-                  <div class="tabpanel-inner">
-                    <span id="hint-cfg-body-file" class="hint">Select or enter path to payload file</span>
-                    <div class="file-picker-row">
-                      <input id="cfg-body-file" type="text" class="control-input mono" placeholder="/path/to/payload.json" aria-describedby="hint-cfg-body-file" data-error="err-cfg-body-file">
-                      <button id="choose-body-file-btn" type="button" class="btn btn-secondary btn-sm">Choose File&hellip;</button>
-                    </div>
-                    <div id="body-file-meta" class="panel-subtitle"></div>
-                    <div id="err-cfg-body-file" class="error-msg">
-                      <span role="img" aria-label="Error">!</span> Select a readable payload file.
+                  <div id="body-panel-none" role="tabpanel" aria-labelledby="tab-body-none" class="tabpanel" tabindex="0">
+                    <div class="tabpanel-inner">
+                      <p class="panel-subtitle">No HTTP request body will be sent.</p>
                     </div>
                   </div>
+
+                  <div id="body-panel-raw" role="tabpanel" aria-labelledby="tab-body-raw" class="tabpanel" hidden>
+                    <div class="tabpanel-inner">
+                      <div class="field-header-row">
+                        <span id="body-raw-bytes" class="panel-subtitle">0 B</span>
+                        <button id="format-json-btn" type="button" class="btn btn-secondary btn-sm">Format JSON</button>
+                      </div>
+                      <textarea id="cfg-body-raw" rows="5" class="control-input mono" placeholder='{"query":"active_records","limit":50}'></textarea>
+                    </div>
+                  </div>
+
+                  <div id="body-panel-file" role="tabpanel" aria-labelledby="tab-body-file" class="tabpanel" hidden>
+                    <div class="tabpanel-inner">
+                      <span id="hint-cfg-body-file" class="hint">Select or enter path to payload file</span>
+                      <div class="file-picker-row">
+                        <input id="cfg-body-file" type="text" class="control-input mono" placeholder="/path/to/payload.json" aria-describedby="hint-cfg-body-file" data-error="err-cfg-body-file">
+                        <button id="choose-body-file-btn" type="button" class="btn btn-secondary btn-sm">Choose File&hellip;</button>
+                      </div>
+                      <div id="body-file-meta" class="panel-subtitle"></div>
+                      <div id="err-cfg-body-file" class="error-msg">
+                        <span role="img" aria-label="Error">!</span> Select a readable payload file.
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              </div>
+
+              <div class="convert-sequence-row">
+                <button id="convert-to-sequence-btn" type="button" class="btn btn-secondary btn-sm">
+                  Convert to Multi-Step Sequence&hellip;
+                </button>
               </div>
             </div>
 
@@ -387,6 +425,57 @@
             <span class="panel-meta" id="final-duration-meta">--</span>
           </div>
           <div class="summary-stats-strip" id="final-summary-grid"></div>
+        </section>
+
+        <section id="journey-summary-panel" class="panel summary-panel" hidden aria-labelledby="journey-summary-heading">
+          <div class="panel-header">
+            <h2 id="journey-summary-heading">Sequence Journey Summary</h2>
+            <span class="panel-meta" id="journey-completion-meta">--</span>
+          </div>
+          <div class="summary-stats-strip" id="journey-summary-grid"></div>
+        </section>
+
+        <section id="step-breakdown-panel" class="panel" hidden aria-labelledby="step-table-caption">
+          <div class="panel-header">
+            <div>
+              <h2 id="step-table-caption">Per-Step Sequence Breakdown</h2>
+              <p class="panel-subtitle">Live per-step throughput, HDR latency percentiles, errors, and iteration aborts</p>
+            </div>
+            <span class="panel-meta" id="step-breakdown-meta">0 steps</span>
+          </div>
+          <div tabindex="0" role="region" aria-labelledby="step-table-caption" class="table-wrapper">
+            <table class="data-table table-steps">
+              <caption class="sr-only">Per-Step Sequence Breakdown</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col">#</th>
+                  <th scope="col">Method</th>
+                  <th scope="col">Target</th>
+                  <th scope="col">Reqs</th>
+                  <th scope="col">RPS</th>
+                  <th scope="col">p50</th>
+                  <th scope="col">p95</th>
+                  <th scope="col">p99</th>
+                  <th scope="col">Err / Abort</th>
+                </tr>
+              </thead>
+              <tbody id="step-table-body">
+                <tr>
+                  <th scope="row">--</th>
+                  <td>--</td>
+                  <td>--</td>
+                  <td>Waiting for sequence telemetry</td>
+                  <td>0</td>
+                  <td>0.0</td>
+                  <td>0.00 ms</td>
+                  <td>0.00 ms</td>
+                  <td>0.00 ms</td>
+                  <td>0 / 0</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section class="charts-grid" aria-label="Real-Time Time-Series Charts">
@@ -569,6 +658,348 @@
         </section>
       </main>
     </div>
+
+    <section id="sequence-studio-view" class="sequence-studio" hidden aria-label="Sequence Studio">
+      <div id="studio-active-banner" class="notice-banner" hidden role="status">
+        A benchmark run is currently active. Sequence editing is locked in read-only inspection mode until the run completes or stops.
+      </div>
+
+      <section class="panel studio-topbar-panel" aria-label="Sequence Configuration and Controls">
+        <div class="studio-preset-row">
+          <div class="field studio-preset-select-wrap">
+            <label for="studio-preset-select">Saved Presets &amp; Recent Configurations</label>
+            <select id="studio-preset-select" class="control-input">
+              <option value="">-- Custom / Unsaved Sequence --</option>
+            </select>
+          </div>
+          <div class="field studio-name-wrap">
+            <label for="studio-seq-name">Sequence Name</label>
+            <input id="studio-seq-name" type="text" class="control-input" placeholder="e.g. Authenticated Checkout Flow">
+          </div>
+          <div class="studio-actions-bar">
+            <button id="studio-new-btn" type="button" class="btn btn-secondary btn-sm">New Sequence</button>
+            <button id="studio-save-btn" type="button" class="btn btn-secondary btn-sm">Save Preset</button>
+            <button id="studio-save-as-btn" type="button" class="btn btn-secondary btn-sm">Save As</button>
+            <button id="studio-import-btn" type="button" class="btn btn-secondary btn-sm">Import JSON</button>
+            <button id="studio-export-btn" type="button" class="btn btn-secondary btn-sm">Export JSON</button>
+            <input id="studio-import-file-input" type="file" accept="application/json,.json" hidden>
+          </div>
+        </div>
+
+        <div id="studio-preset-save-panel" class="preset-save-panel" hidden>
+          <div class="workload-grid">
+            <div class="field">
+              <label for="studio-preset-name-input">Preset Name</label>
+              <input id="studio-preset-name-input" type="text" class="control-input" placeholder="e.g. Authenticated Checkout Flow">
+            </div>
+            <div class="field">
+              <label for="studio-preset-desc-input">Notes (optional)</label>
+              <input id="studio-preset-desc-input" type="text" class="control-input" placeholder="Workflow description or SLA">
+            </div>
+          </div>
+          <div class="button-group">
+            <button id="studio-preset-commit-btn" type="button" class="btn btn-primary btn-sm">Save Sequence Preset</button>
+            <button id="studio-preset-cancel-btn" type="button" class="btn btn-secondary btn-sm">Cancel</button>
+          </div>
+        </div>
+
+        <div class="studio-control-row">
+          <div class="field">
+            <label for="studio-base-url">Base URL (optional)</label>
+            <input id="studio-base-url" type="url" class="control-input mono" placeholder="api.example.com" data-error="err-studio-base-url">
+            <div id="err-studio-base-url" class="error-msg">
+              <span role="img" aria-label="Error">!</span> Enter a valid HTTP or HTTPS base URL.
+            </div>
+          </div>
+          <div class="field">
+            <label for="studio-concurrency">Concurrency (VUs)</label>
+            <input id="studio-concurrency" type="number" min="1" step="1" value="50" class="control-input">
+          </div>
+          <div class="field">
+            <label for="studio-duration">Duration</label>
+            <input id="studio-duration" type="text" value="30s" class="control-input mono">
+          </div>
+          <div class="field">
+            <label for="studio-ramp-up">Ramp-Up</label>
+            <input id="studio-ramp-up" type="text" value="0s" class="control-input mono">
+          </div>
+          <div class="field">
+            <label for="studio-timeout">Default Timeout</label>
+            <input id="studio-timeout" type="text" value="5000ms" class="control-input mono">
+          </div>
+          <div class="studio-actions-bar">
+            <button id="studio-validate-btn" type="button" class="btn btn-secondary">Validate</button>
+            <button id="studio-dry-run-btn" type="button" class="btn btn-secondary">Dry-Run (1 VU)</button>
+            <button id="studio-start-btn" type="button" class="btn btn-primary">Start Load Test</button>
+          </div>
+        </div>
+
+        <details id="studio-shared-details" class="auto-export-details">
+          <summary>Shared Defaults (Base Headers, Initial Variables &amp; Auto-Export)</summary>
+          <div class="auto-export-fields">
+            <div class="field">
+              <div class="field-header-row">
+                <label>Scenario Default Headers (inherited by all steps unless overridden)</label>
+                <button id="studio-add-default-header-btn" type="button" class="btn btn-secondary btn-sm">+ Add Default Header</button>
+              </div>
+              <div id="studio-default-headers-list" class="inline-list-rows"></div>
+            </div>
+
+            <div class="field">
+              <div class="field-header-row">
+                <label>Initial Per-Iteration Variables</label>
+                <button id="studio-add-init-var-btn" type="button" class="btn btn-secondary btn-sm">+ Add Initial Variable</button>
+              </div>
+              <div id="studio-init-vars-list" class="inline-list-rows"></div>
+            </div>
+          </div>
+        </details>
+
+        <div id="studio-validation-banner" class="notice-banner" hidden role="status"></div>
+      </section>
+
+      <div class="studio-grid">
+        <aside class="panel studio-pipeline" aria-label="Ordered Step Pipeline">
+          <div class="panel-header">
+            <div>
+              <h2>Ordered Call Stack</h2>
+              <p class="panel-subtitle" id="studio-pipeline-count">0 steps</p>
+            </div>
+            <button id="studio-add-step-btn" type="button" class="btn btn-primary btn-sm">+ Add Step</button>
+          </div>
+          <ol id="step-pipeline-list" class="pipeline-list"></ol>
+        </aside>
+
+        <section class="panel studio-workspace" aria-label="Step Inspector and Sequence Review">
+          <div class="tabs-container">
+            <div id="studio-workspace-tablist" focusgroup="tablist nomemory" role="tablist" aria-label="Sequence Studio Modes" class="tablist">
+              <button type="button" role="tab" id="tab-studio-edit" aria-selected="true" focusgroupstart data-studio-tab="edit" tabindex="0">Edit Selected Step</button>
+              <button type="button" role="tab" id="tab-studio-review" aria-selected="false" data-studio-tab="review" tabindex="-1">Review &amp; Dry-Run (1 VU)</button>
+            </div>
+
+            <div id="studio-panel-edit" role="tabpanel" aria-labelledby="tab-studio-edit" class="tabpanel">
+              <div class="tabpanel-inner">
+                <div id="step-editor-empty" class="studio-empty-state" hidden>
+                  No API steps configured. Click <strong>+ Add Step</strong> in the Ordered Call Stack to begin.
+                </div>
+
+                <div id="step-editor-form" class="config-form">
+                  <div class="studio-step-header-grid">
+                    <div class="field">
+                      <label for="step-name-input">Step Name</label>
+                      <input id="step-name-input" type="text" class="control-input" placeholder="e.g. Authenticate">
+                    </div>
+                    <div class="field">
+                      <label for="step-method-select">Method</label>
+                      <select id="step-method-select" class="control-input">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="HEAD">HEAD</option>
+                      </select>
+                    </div>
+                    <label class="check-toggle-label">
+                      <input id="step-enabled-checkbox" type="checkbox" checked>
+                      Enabled
+                    </label>
+                  </div>
+
+                  <div class="field">
+                    <label for="step-url-input">Step URL or Relative Path</label>
+                    <span class="hint">Supports relative paths (e.g. <code>/v1/users/{{user_id}}</code>) when Base URL is set, or full URLs.</span>
+                    <input id="step-url-input" type="text" class="control-input mono" placeholder="/v1/auth/login">
+                  </div>
+
+                  <div id="step-var-chips" class="var-chip-bar" aria-label="Insert available variable placeholder"></div>
+
+                  <div class="tabs-container">
+                    <div id="step-sub-tablist" focusgroup="tablist nomemory" role="tablist" aria-label="Step Configuration Sections" class="tablist">
+                      <button type="button" role="tab" id="tab-step-req" aria-selected="true" focusgroupstart data-step-subtab="req" tabindex="0">Request</button>
+                      <button type="button" role="tab" id="tab-step-extract" aria-selected="false" data-step-subtab="extract" tabindex="-1">Extract Variables</button>
+                      <button type="button" role="tab" id="tab-step-flow" aria-selected="false" data-step-subtab="flow" tabindex="-1">Expectations &amp; Flow</button>
+                    </div>
+
+                    <div id="step-panel-req" role="tabpanel" aria-labelledby="tab-step-req" class="tabpanel">
+                      <div class="tabpanel-inner">
+                        <div class="field">
+                          <div class="field-header-row">
+                            <label>Step Headers</label>
+                            <button id="step-add-header-btn" type="button" class="btn btn-secondary btn-sm">+ Add Header</button>
+                          </div>
+                          <div id="step-headers-list" class="headers-list"></div>
+                        </div>
+
+                        <details id="step-inherited-headers-details" class="auto-export-details" hidden>
+                          <summary>Inherited Scenario Default Headers</summary>
+                          <div id="step-inherited-headers-list" class="auto-export-fields"></div>
+                        </details>
+
+                        <div class="field">
+                          <label>Step Body</label>
+                          <div class="tabs-container">
+                            <div id="step-body-tablist" focusgroup="tablist nomemory" role="tablist" aria-label="Step Body Mode" class="tablist">
+                              <button type="button" role="tab" id="tab-step-body-none" aria-selected="true" focusgroupstart data-step-body-mode="none" tabindex="0">None</button>
+                              <button type="button" role="tab" id="tab-step-body-raw" aria-selected="false" data-step-body-mode="raw" tabindex="-1">Raw / JSON</button>
+                              <button type="button" role="tab" id="tab-step-body-file" aria-selected="false" data-step-body-mode="file" tabindex="-1">From File</button>
+                            </div>
+
+                            <div id="step-body-panel-none" role="tabpanel" aria-labelledby="tab-step-body-none" class="tabpanel" tabindex="0">
+                              <div class="tabpanel-inner">
+                                <p class="panel-subtitle">No HTTP request body sent for this step.</p>
+                              </div>
+                            </div>
+
+                            <div id="step-body-panel-raw" role="tabpanel" aria-labelledby="tab-step-body-raw" class="tabpanel" hidden>
+                              <div class="tabpanel-inner">
+                                <div class="field-header-row">
+                                  <span id="step-body-raw-bytes" class="panel-subtitle">0 B</span>
+                                  <button id="step-format-json-btn" type="button" class="btn btn-secondary btn-sm">Format JSON</button>
+                                </div>
+                                <textarea id="step-body-raw-input" rows="5" class="control-input mono" placeholder='{"user_id":"{{user_id}}"}'></textarea>
+                              </div>
+                            </div>
+
+                            <div id="step-body-panel-file" role="tabpanel" aria-labelledby="tab-step-body-file" class="tabpanel" hidden>
+                              <div class="tabpanel-inner">
+                                <div class="file-picker-row">
+                                  <input id="step-body-file-input" type="text" class="control-input mono" placeholder="/path/to/step-payload.json">
+                                  <button id="step-choose-body-file-btn" type="button" class="btn btn-secondary btn-sm">Choose File&hellip;</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div id="step-panel-extract" role="tabpanel" aria-labelledby="tab-step-extract" class="tabpanel" hidden>
+                      <div class="tabpanel-inner">
+                        <div class="field-header-row">
+                          <span class="hint">Extract values from this step's response into per-VU iteration variables for downstream steps.</span>
+                          <button id="step-add-extractor-btn" type="button" class="btn btn-secondary btn-sm">+ Add Extractor</button>
+                        </div>
+                        <div id="step-extractors-list" class="inline-list-rows"></div>
+                      </div>
+                    </div>
+
+                    <div id="step-panel-flow" role="tabpanel" aria-labelledby="tab-step-flow" class="tabpanel" hidden>
+                      <div class="tabpanel-inner">
+                        <div class="workload-grid">
+                          <div class="field">
+                            <label for="step-status-mode">Expected HTTP Status</label>
+                            <select id="step-status-mode" class="control-input">
+                              <option value="any_2xx">Any 2xx (default)</option>
+                              <option value="exact">Specific Status Codes</option>
+                              <option value="range">Status Code Range</option>
+                              <option value="any">Any Status</option>
+                            </select>
+                          </div>
+                          <div class="field" id="step-status-exact-wrap" hidden>
+                            <label for="step-status-exact">Status Codes (comma-separated)</label>
+                            <input id="step-status-exact" type="text" class="control-input mono" placeholder="200, 201">
+                          </div>
+                          <div class="field" id="step-status-range-wrap" hidden>
+                            <label>Min / Max Status</label>
+                            <div class="file-picker-row">
+                              <input id="step-status-min" type="number" min="100" max="599" value="200" class="control-input mono">
+                              <input id="step-status-max" type="number" min="100" max="599" value="299" class="control-input mono">
+                            </div>
+                          </div>
+                          <div class="field">
+                            <label for="step-on-failure">On Step Failure</label>
+                            <select id="step-on-failure" class="control-input">
+                              <option value="abort_iteration">Abort Iteration (default)</option>
+                              <option value="continue">Continue to Next Step</option>
+                            </select>
+                          </div>
+                          <div class="field">
+                            <label for="step-think-time">Think Time After Step</label>
+                            <input id="step-think-time" type="text" class="control-input mono" placeholder="0ms">
+                          </div>
+                          <div class="field">
+                            <label for="step-timeout-override">Step Timeout Override (optional)</label>
+                            <input id="step-timeout-override" type="text" class="control-input mono" placeholder="Inherit default">
+                          </div>
+                        </div>
+
+                        <div class="field">
+                          <div class="field-header-row">
+                            <label>JSON Body Assertions</label>
+                            <button id="step-add-json-check-btn" type="button" class="btn btn-secondary btn-sm">+ Add JSON Assertion</button>
+                          </div>
+                          <div id="step-json-checks-list" class="inline-list-rows"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="studio-panel-review" role="tabpanel" aria-labelledby="tab-studio-review" class="tabpanel" hidden>
+              <div class="tabpanel-inner">
+                <div class="panel-header">
+                  <div>
+                    <h3 id="review-matrix-caption">Static Sequence Review Matrix</h3>
+                    <p class="panel-subtitle">Verifies step ordering, variable dependencies, and failure policies before sending load</p>
+                  </div>
+                  <div class="studio-actions-bar">
+                    <span id="studio-review-status-pill" class="badge badge-idle">Not Validated</span>
+                    <button id="studio-refresh-review-btn" type="button" class="btn btn-secondary btn-sm">Refresh Review</button>
+                    <button id="studio-copy-cli-btn" type="button" class="btn btn-secondary btn-sm">Copy CLI</button>
+                  </div>
+                </div>
+
+                <pre id="studio-cli-preview" class="cli-preview mono" hidden></pre>
+                <div id="studio-review-alerts" class="review-alerts"></div>
+
+                <div tabindex="0" role="region" aria-labelledby="review-matrix-caption" class="table-wrapper">
+                  <table class="data-table table-review">
+                    <caption class="sr-only">Static Sequence Review Matrix</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Step</th>
+                        <th scope="col">#</th>
+                        <th scope="col">Method &amp; Target</th>
+                        <th scope="col">Consumes</th>
+                        <th scope="col">Produces</th>
+                        <th scope="col">Expectations</th>
+                        <th scope="col">On Failure</th>
+                      </tr>
+                    </thead>
+                    <tbody id="studio-review-table-body">
+                      <tr>
+                        <th scope="row">--</th>
+                        <td>--</td>
+                        <td>Click Validate or Refresh Review</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="panel-header">
+                  <div>
+                    <h3>1-VU Dry-Run Trace</h3>
+                    <p class="panel-subtitle">Executes one sequential iteration with sensitive headers, URLs, and tokens redacted</p>
+                  </div>
+                  <div class="studio-actions-bar">
+                    <span id="dry-run-summary-badge" class="badge badge-idle">Idle</span>
+                    <button id="studio-run-dry-run-btn" type="button" class="btn btn-primary btn-sm">Run 1-VU Dry-Run</button>
+                  </div>
+                </div>
+                <div id="dry-run-trace-list" class="dry-run-trace-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
   </div>
 
   <dialog id="about-dialog" class="about-dialog" closedby="any" aria-labelledby="about-dialog-title">

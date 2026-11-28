@@ -3,30 +3,39 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::parser::ValueSource;
+use clap::{ArgMatches, CommandFactory, FromArgMatches};
 use rusty_loader::changelog::full_changelog;
 use rusty_loader::cli::{parse_header, Cli};
-use rusty_loader::config::{BenchmarkConfig, BenchmarkConfigInput, BodyMode, GuiConfig, HeaderEntry};
+use rusty_loader::config::{
+    validate_input_with_review, BenchmarkConfig, BenchmarkConfigInput, BodyMode, GuiConfig,
+    HeaderEntry,
+};
 use rusty_loader::engine::TestController;
 #[cfg(feature = "gui")]
 use rusty_loader::gui::{open_browser_url, start_gui_server, start_interactive_gui_server, RunManager};
 use rusty_loader::metrics::snapshot::{TelemetryHub, TelemetrySnapshot};
-use rusty_loader::os::check_and_warn_os_limits;
+use rusty_loader::os::{check_and_warn_os_limits, OsLimits};
 #[cfg(feature = "gui")]
 use rusty_loader::os::raise_nofile_soft_limit;
 #[cfg(feature = "gui")]
 use rusty_loader::presets::PresetStore;
 use rusty_loader::reporter::{report_results_with_snapshots, spawn_live_progress_bar};
+use rusty_loader::scenario::{
+    execute_dry_run, load_scenario_file, render_dry_run_report, render_review_report, RequestMode,
+};
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let matches = Cli::command().get_matches();
+    let cli = Cli::from_arg_matches(&matches)?;
+
     if cli.changelog {
         print!("{}", full_changelog());
         return Ok(());
     }
 
     if cli.desktop {
-        let initial = initial_input_from_cli(&cli);
+        let initial = initial_input_from_cli(&cli, &matches)?;
         #[cfg(all(feature = "desktop", target_os = "macos"))]
         {
             return rusty_loader::desktop::run_desktop_app(initial);
@@ -50,7 +59,7 @@ fn main() -> Result<()> {
                 .enable_all()
                 .build()
                 .context("failed to initialize Tokio runtime")?;
-            return rt.block_on(run_ui_serve(cli));
+            return rt.block_on(run_ui_serve(cli, matches));
         }
     }
 
@@ -58,14 +67,44 @@ fn main() -> Result<()> {
         .enable_all()
         .build()
         .context("failed to initialize Tokio runtime")?;
-    rt.block_on(run_cli_benchmark(cli))
+    rt.block_on(run_cli_benchmark(cli, matches))
 }
 
-fn initial_input_from_cli(cli: &Cli) -> Option<BenchmarkConfigInput> {
-    if cli.url.trim().is_empty() {
-        return None;
-    }
+fn is_cli_flag_explicit(matches: &ArgMatches, id: &str) -> bool {
+    matches!(matches.value_source(id), Some(ValueSource::CommandLine))
+}
 
+fn load_scenario_with_cli_overrides(
+    cli: &Cli,
+    matches: &ArgMatches,
+    scenario_path: &std::path::Path,
+) -> Result<BenchmarkConfigInput> {
+    let mut input = load_scenario_file(scenario_path)?;
+    if is_cli_flag_explicit(matches, "concurrency") {
+        input.concurrency = cli.concurrency;
+    }
+    if is_cli_flag_explicit(matches, "duration") {
+        input.duration = format!("{}ms", cli.duration.as_millis());
+    }
+    if is_cli_flag_explicit(matches, "ramp_up") {
+        input.ramp_up = format!("{}ms", cli.ramp_up.as_millis());
+    }
+    if is_cli_flag_explicit(matches, "timeout") {
+        input.timeout = format!("{}ms", cli.timeout.as_millis());
+    }
+    if let Some(ref p) = cli.output_json {
+        input.output_json = Some(p.clone());
+    }
+    if let Some(ref p) = cli.output_csv {
+        input.output_csv = Some(p.clone());
+    }
+    if let Some(ref p) = cli.output_pdf {
+        input.output_pdf = Some(p.clone());
+    }
+    Ok(input)
+}
+
+fn single_input_from_cli(cli: &Cli) -> BenchmarkConfigInput {
     let headers = cli
         .headers
         .iter()
@@ -91,7 +130,8 @@ fn initial_input_from_cli(cli: &Cli) -> Option<BenchmarkConfigInput> {
         _ => (BodyMode::None, None, None),
     };
 
-    Some(BenchmarkConfigInput {
+    BenchmarkConfigInput {
+        mode: RequestMode::Single,
         url: cli.url.clone(),
         method: cli.method,
         concurrency: cli.concurrency,
@@ -105,16 +145,36 @@ fn initial_input_from_cli(cli: &Cli) -> Option<BenchmarkConfigInput> {
         output_json: cli.output_json.clone(),
         output_csv: cli.output_csv.clone(),
         output_pdf: cli.output_pdf.clone(),
-    })
+        scenario: None,
+    }
+}
+
+fn initial_input_from_cli(
+    cli: &Cli,
+    matches: &ArgMatches,
+) -> Result<Option<BenchmarkConfigInput>> {
+    if let Some(ref scenario_path) = cli.scenario {
+        return Ok(Some(load_scenario_with_cli_overrides(
+            cli,
+            matches,
+            scenario_path,
+        )?));
+    }
+
+    if cli.url.trim().is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(single_input_from_cli(cli)))
 }
 
 #[cfg(feature = "gui")]
-async fn run_ui_serve(cli: Cli) -> Result<()> {
+async fn run_ui_serve(cli: Cli, matches: ArgMatches) -> Result<()> {
     let gui_config = GuiConfig::from_cli(&cli)?;
     let _ = raise_nofile_soft_limit(65_536);
     check_and_warn_os_limits();
 
-    let initial = initial_input_from_cli(&cli);
+    let initial = initial_input_from_cli(&cli, &matches)?;
     let manager = Arc::new(RunManager::new());
     let presets = Arc::new(PresetStore::load_default()?);
 
@@ -141,9 +201,50 @@ async fn run_ui_serve(cli: Cli) -> Result<()> {
     Ok(())
 }
 
-async fn run_cli_benchmark(cli: Cli) -> Result<()> {
+async fn run_cli_benchmark(cli: Cli, matches: ArgMatches) -> Result<()> {
     let gui_config = GuiConfig::from_cli(&cli)?;
-    let config = BenchmarkConfig::from_cli(cli)?;
+
+    if cli.review {
+        let input = match cli.scenario.as_deref() {
+            Some(path) => load_scenario_with_cli_overrides(&cli, &matches, path)?,
+            None => single_input_from_cli(&cli),
+        };
+        let (report, review_opt) = validate_input_with_review(&input, Some(OsLimits::detect()));
+        if let Some(review) = review_opt {
+            print!("{}", render_review_report(&review));
+        } else {
+            println!(
+                "Single-Request Review: {} {} (concurrency: {}, duration: {}, timeout: {})",
+                input.method, input.url, input.concurrency, input.duration, input.timeout
+            );
+            for warn in &report.warnings {
+                println!("Warning: {warn}");
+            }
+            for (field, err) in &report.field_errors {
+                println!("Error [{field}]: {err}");
+            }
+        }
+        if !report.valid {
+            anyhow::bail!("configuration validation failed");
+        }
+        return Ok(());
+    }
+
+    let config = if let Some(ref scenario_path) = cli.scenario {
+        let input = load_scenario_with_cli_overrides(&cli, &matches, scenario_path)?;
+        BenchmarkConfig::from_input(input)?
+    } else {
+        BenchmarkConfig::from_cli(cli.clone())?
+    };
+
+    if cli.dry_run {
+        let trace = execute_dry_run(&config).await?;
+        print!("{}", render_dry_run_report(&trace));
+        if !trace.completed {
+            anyhow::bail!("dry-run iteration failed or aborted");
+        }
+        return Ok(());
+    }
 
     check_and_warn_os_limits();
 

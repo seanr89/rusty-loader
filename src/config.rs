@@ -3,6 +3,7 @@ use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -12,6 +13,10 @@ use thiserror::Error;
 
 use crate::cli::{parse_duration, parse_header, parse_timeout, Cli, HttpMethod};
 use crate::os::OsLimits;
+use crate::scenario::{
+    compile_scenario, validate_scenario, CompiledScenario, RequestMode, ScenarioConfigInput,
+    ScenarioMetaSummary, ScenarioReviewReport,
+};
 
 /// Errors that can occur when validating and constructing [`BenchmarkConfig`].
 #[derive(Debug, Error)]
@@ -61,6 +66,9 @@ pub enum ConfigError {
 
     #[error("invalid GUI bind IP address '{addr}': {reason}")]
     InvalidGuiBindAddress { addr: String, reason: String },
+
+    #[error("invalid API sequence scenario: {0}")]
+    InvalidScenario(String),
 }
 
 fn default_true() -> bool {
@@ -72,7 +80,7 @@ fn default_method() -> HttpMethod {
 }
 
 fn default_concurrency() -> usize {
-    700
+    50
 }
 
 fn default_duration_str() -> String {
@@ -109,6 +117,9 @@ pub enum BodyMode {
 /// Serializable, pre-validation benchmark configuration shared by UI forms, presets, and CLI adapters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BenchmarkConfigInput {
+    #[serde(default)]
+    pub mode: RequestMode,
+    #[serde(default)]
     pub url: String,
     #[serde(default = "default_method")]
     pub method: HttpMethod,
@@ -134,11 +145,14 @@ pub struct BenchmarkConfigInput {
     pub output_csv: Option<PathBuf>,
     #[serde(default)]
     pub output_pdf: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scenario: Option<ScenarioConfigInput>,
 }
 
 impl Default for BenchmarkConfigInput {
     fn default() -> Self {
         Self {
+            mode: RequestMode::Single,
             url: String::new(),
             method: default_method(),
             concurrency: default_concurrency(),
@@ -152,6 +166,7 @@ impl Default for BenchmarkConfigInput {
             output_json: None,
             output_csv: None,
             output_pdf: None,
+            scenario: None,
         }
     }
 }
@@ -169,12 +184,16 @@ pub fn validate_input(
     input: &BenchmarkConfigInput,
     os_limits: Option<OsLimits>,
 ) -> ValidationReport {
+    validate_input_with_review(input, os_limits).0
+}
+
+/// Validates a [`BenchmarkConfigInput`] and returns both [`ValidationReport`] and optional [`ScenarioReviewReport`].
+pub fn validate_input_with_review(
+    input: &BenchmarkConfigInput,
+    os_limits: Option<OsLimits>,
+) -> (ValidationReport, Option<ScenarioReviewReport>) {
     let mut field_errors = HashMap::new();
     let mut warnings = Vec::new();
-
-    if let Err(err) = validate_target_url(&input.url) {
-        field_errors.insert("url".to_string(), err.to_string());
-    }
 
     if input.concurrency == 0 {
         field_errors.insert(
@@ -195,15 +214,17 @@ pub fn validate_input(
         }
     };
 
-    match parse_timeout(&input.timeout) {
+    let parsed_timeout = match parse_timeout(&input.timeout) {
         Ok(t) if t.is_zero() => {
             field_errors.insert("timeout".to_string(), ConfigError::InvalidTimeout.to_string());
+            Duration::from_millis(5000)
         }
-        Ok(_) => {}
+        Ok(t) => t,
         Err(reason) => {
             field_errors.insert("timeout".to_string(), reason);
+            Duration::from_millis(5000)
         }
-    }
+    };
 
     match parse_duration(&input.ramp_up) {
         Ok(ramp_up) => {
@@ -219,6 +240,48 @@ pub fn validate_input(
         Err(reason) => {
             field_errors.insert("ramp_up".to_string(), reason);
         }
+    }
+
+    if input.mode == RequestMode::Sequence {
+        let Some(ref scenario) = input.scenario else {
+            field_errors.insert(
+                "scenario.steps".to_string(),
+                "sequence mode requires a scenario with at least one API step".to_string(),
+            );
+            return (
+                ValidationReport {
+                    valid: false,
+                    field_errors,
+                    warnings,
+                },
+                None,
+            );
+        };
+
+        let (sc_report, mut review) = validate_scenario(
+            scenario,
+            parsed_timeout,
+            input.concurrency,
+            os_limits,
+        );
+        for (k, v) in sc_report.field_errors {
+            field_errors.insert(k, v);
+        }
+        warnings.extend(sc_report.warnings);
+        review.valid = field_errors.is_empty() && review.valid;
+
+        return (
+            ValidationReport {
+                valid: field_errors.is_empty(),
+                field_errors,
+                warnings,
+            },
+            Some(review),
+        );
+    }
+
+    if let Err(err) = validate_target_url(&input.url) {
+        field_errors.insert("url".to_string(), err.to_string());
     }
 
     for (idx, entry) in input.headers.iter().enumerate() {
@@ -287,14 +350,17 @@ pub fn validate_input(
         }
     }
 
-    ValidationReport {
-        valid: field_errors.is_empty(),
-        field_errors,
-        warnings,
-    }
+    (
+        ValidationReport {
+            valid: field_errors.is_empty(),
+            field_errors,
+            warnings,
+        },
+        None,
+    )
 }
 
-fn validate_target_url(raw_url: &str) -> Result<Url, ConfigError> {
+pub(crate) fn validate_target_url(raw_url: &str) -> Result<Url, ConfigError> {
     let trimmed = raw_url.trim();
     let parsed_url = Url::parse(trimmed).map_err(|e| ConfigError::InvalidUrl {
         url: raw_url.to_string(),
@@ -318,7 +384,10 @@ fn validate_target_url(raw_url: &str) -> Result<Url, ConfigError> {
     Ok(parsed_url)
 }
 
-fn validate_header_entry(name: &str, value: &str) -> Result<(HeaderName, HeaderValue), ConfigError> {
+pub(crate) fn validate_header_entry(
+    name: &str,
+    value: &str,
+) -> Result<(HeaderName, HeaderValue), ConfigError> {
     let name_trimmed = name.trim();
     if name_trimmed.is_empty() {
         return Err(ConfigError::InvalidHeader(
@@ -461,6 +530,7 @@ pub struct BenchmarkConfig {
     pub output_json: Option<PathBuf>,
     pub output_csv: Option<PathBuf>,
     pub output_pdf: Option<PathBuf>,
+    pub scenario: Option<Arc<CompiledScenario>>,
 }
 
 impl BenchmarkConfig {
@@ -508,6 +578,7 @@ impl BenchmarkConfig {
             output_json,
             output_csv,
             output_pdf,
+            scenario: None,
         })
     }
 
@@ -556,6 +627,47 @@ impl BenchmarkConfig {
         let ramp_up =
             parse_duration(&input.ramp_up).map_err(ConfigError::InvalidRampUpFormat)?;
 
+        if input.concurrency == 0 {
+            return Err(ConfigError::InvalidConcurrency(input.concurrency));
+        }
+        if duration.is_zero() {
+            return Err(ConfigError::InvalidDuration);
+        }
+        if timeout.is_zero() {
+            return Err(ConfigError::InvalidTimeout);
+        }
+        if ramp_up > duration {
+            return Err(ConfigError::RampUpExceedsDuration { ramp_up, duration });
+        }
+
+        if input.mode == RequestMode::Sequence {
+            let scenario_input = input.scenario.ok_or_else(|| {
+                ConfigError::InvalidScenario("missing sequence scenario configuration".to_string())
+            })?;
+            let compiled = compile_scenario(&scenario_input, timeout)?;
+            let first_step = compiled.steps.first().ok_or_else(|| {
+                ConfigError::InvalidScenario("sequence must contain at least one enabled step".to_string())
+            })?;
+            let placeholder_url = Url::parse(&first_step.url_template.render_with_dummy())
+                .or_else(|_| Url::parse("http://localhost/"))
+                .map_err(|err| ConfigError::InvalidScenario(err.to_string()))?;
+
+            return Ok(Self {
+                url: placeholder_url,
+                concurrency: input.concurrency,
+                duration,
+                method: first_step.method.clone(),
+                headers: HeaderMap::new(),
+                body: None,
+                timeout,
+                ramp_up,
+                output_json: input.output_json,
+                output_csv: input.output_csv,
+                output_pdf: input.output_pdf,
+                scenario: Some(Arc::new(compiled)),
+            });
+        }
+
         let mut headers = HeaderMap::new();
         for entry in &input.headers {
             if !entry.enabled {
@@ -593,6 +705,24 @@ impl BenchmarkConfig {
         )
     }
 
+    /// Returns `true` when this benchmark runs an ordered multi-step API sequence.
+    pub fn is_sequence(&self) -> bool {
+        self.scenario.is_some()
+    }
+
+    /// Returns the number of distinct HTTP origins targeted by this benchmark (>= 1).
+    pub fn unique_host_count(&self) -> usize {
+        self.scenario
+            .as_ref()
+            .map(|s| s.unique_host_count.max(1))
+            .unwrap_or(1)
+    }
+
+    /// Returns redacted scenario step metadata when executing in sequence mode.
+    pub fn scenario_meta(&self) -> Option<ScenarioMetaSummary> {
+        self.scenario.as_ref().map(|s| s.meta_summary())
+    }
+
     /// Returns the resolved request body as a byte slice, if configured.
     pub fn body_bytes(&self) -> Option<&[u8]> {
         self.body.as_deref().map(str::as_bytes)
@@ -628,6 +758,7 @@ mod tests {
     #[test]
     fn test_validate_input_catches_invalid_fields_and_fd_warnings() {
         let input = BenchmarkConfigInput {
+            mode: RequestMode::Single,
             url: "ftp://bad.example.com".to_string(),
             method: HttpMethod::Post,
             concurrency: 500,
@@ -645,6 +776,7 @@ mod tests {
             output_json: None,
             output_csv: None,
             output_pdf: None,
+            scenario: None,
         };
 
         let limits = OsLimits {
@@ -668,6 +800,7 @@ mod tests {
         write!(tmp, r#"{{"ok":true}}"#).expect("write payload");
 
         let input = BenchmarkConfigInput {
+            mode: RequestMode::Single,
             url: "https://api.example.com/v1/items".to_string(),
             method: HttpMethod::Post,
             concurrency: 32,
@@ -692,6 +825,7 @@ mod tests {
             output_json: None,
             output_csv: None,
             output_pdf: None,
+            scenario: None,
         };
 
         let cfg = BenchmarkConfig::from_input(input).expect("valid input");
@@ -702,5 +836,6 @@ mod tests {
         assert_eq!(cfg.timeout, Duration::from_millis(1500));
         assert_eq!(cfg.headers.len(), 1);
         assert_eq!(cfg.body.as_deref(), Some(r#"{"ok":true}"#));
+        assert!(cfg.scenario.is_none());
     }
 }
